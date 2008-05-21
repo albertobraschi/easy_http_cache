@@ -86,22 +86,19 @@ This will check which one is the newesr time to compare with the "Last-Modified"
 Nonetheless, you can use the Proc to be called within the current controller instance also:
 
   class ListsController < ApplicationController
-    http_cache :index, :show,
-               :last_change_at => [ Proc.new {|c| c.get_instance_variable('@current_user').updated_at, Time.utc(2007,12,27), 10.minutes.ago ]
+    http_cache :index, :show, :last_change_at => [ Proc.new {|c| c.get_instance_variable('@current_user').updated_at, Time.utc(2007,12,27), 10.minutes.ago ]
   end
 
 To avoid errors when @current_user is not defined in the controller, you can do:
 
   class ListsController < ApplicationController
-    http_cache :index, :show,
-               :last_change_at => Proc.new {|c| c.get_instance_variable('@current_user'), :if => Proc.new{|c| c.get_instance_variable('@current_user') }
+    http_cache :index, :show, :last_change_at => Proc.new {|c| c.get_instance_variable('@current_user'), :if => Proc.new{|c| c.get_instance_variable('@current_user') }
   end
 
 Or a shortcut:
 
   class ListsController < ApplicationController
-    http_cache :index, :show,
-               :last_change_at => Proc.new {|c| user = c.get_instance_variable('@current_user') ? user.updated_at : false }
+    http_cache :index, :show, :last_change_at => Proc.new {|c| user = c.get_instance_variable('@current_user') ? user.updated_at : false }
   end
 
 If :last_change_at contains any object which is not a Time (or DateTime or Date
