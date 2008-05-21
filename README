@@ -4,7 +4,8 @@ Blog: http://josevalim.blogspot.com/
 License: MIT
 Version: 1.0
 
-= Description
+Description
+-----------
 
 Allows Rails applications to use HTTP 1.1 cache specifications easily:
 
@@ -12,7 +13,8 @@ Allows Rails applications to use HTTP 1.1 cache specifications easily:
     http_cache :index, :show
   end
 
-= Install
+Install
+-------
 
 This plugin uses features that only exist on Rails 2.1 and above (including 2.1 RC)
 So if you just want a static copy of the plugin:
@@ -21,7 +23,8 @@ So if you just want a static copy of the plugin:
     git clone git://github.com/josevalim/easy-http-cache.git vendor/plugins/eash_http_cache
     rm -rf vendor/plugins/easy_http_cache/.git
 
-= Usage
+Examples
+--------
 
 Just as above:
 
@@ -47,17 +50,30 @@ And if you want to expire all http cache before 2008, just do:
     http_cache :index, :show, :last_change_at => Time.utc(2008)
   end
 
-Or if you are looking into somthing more dynamic:
+Or if you are looking into something more dynamic:
 
   class ListsController < ApplicationController
     http_cache :index, :show, :last_change_at => Proc.new{ 10.minutes.ago }
   end
 
-How this works?
+How the last example works?
+---------------------------
 
-The first time http://www.railsapp.com/lists/index is requested, it renders the action normally but adds a "Last-Modified" to your response with the current request time, let's suppose 10h30.
-If the client do another request at 10h35, the http_cache will check that :last_change_at and see that the last change was at 10h25, which is older than the "Last-Modified" field (10h30) returned by the client's browser, so it sends a "304 Not Modified" response and does not execute the action.
-But, if another request from the same client comes at 10h42, the last change was at 10h32, which is newer than the "Last-Modified" field (10h30), so the action is performed again and "Last-Modified" field set at 10h42.
+The first time http://www.railsapp.com/lists/index is requested, it renders the
+action normally but adds a "Last-Modified" to your response with the current
+request time, let's suppose 10h30.
+
+If the client do another request at 10h35, the http_cache will check that
+:last_change_at and see that the last change was at 10h25, which is older than
+the "Last-Modified" field (10h30) returned by the client's browser, so it sends
+a "304 Not Modified" response and does not execute the action.
+
+But, if another request from the same client comes at 10h42, the last change was
+at 10h32, which is newer than the "Last-Modified" field (10h30), so the action
+is performed again and "Last-Modified" field set at 10h42.
+
+More examples
+-------------
  
 You can also pass an array at :last_change_at as below:
 
@@ -70,25 +86,30 @@ This will check which one is the newesr time to compare with the "Last-Modified"
 Nonetheless, you can use the Proc to be called within the current controller instance also:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => [ Proc.new {|c| c.get_instance_variable('@current_user').updated_at, Time.utc(2007,12,27), 10.minutes.ago ]
+    http_cache :index, :show,
+               :last_change_at => [ Proc.new {|c| c.get_instance_variable('@current_user').updated_at, Time.utc(2007,12,27), 10.minutes.ago ]
   end
 
 To avoid errors when @current_user is not defined in the controller, you can do:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => Proc.new {|c| c.get_instance_variable('@current_user'), :if => Proc.new{|c| c.get_instance_variable('@current_user') }
+    http_cache :index, :show,
+               :last_change_at => Proc.new {|c| c.get_instance_variable('@current_user'), :if => Proc.new{|c| c.get_instance_variable('@current_user') }
   end
 
 Or a shortcut:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => Proc.new {|c| user = c.get_instance_variable('@current_user') ? user.updated_at : false }
+    http_cache :index, :show,
+               :last_change_at => Proc.new {|c| user = c.get_instance_variable('@current_user') ? user.updated_at : false }
   end
 
-If :last_change_at contains any object which is not a Time (or DateTime or Date or TimeZone...), the cache is not performed.
+If :last_change_at contains any object which is not a Time (or DateTime or Date
+or TimeZone...), the cache is not performed.
 
-Finally, if no Proc or only Proc with arity equal 0 are found at :if or :last_change_at, the http_cache filter will be prepend to your filter chain.
-This behavior is desired when rendering static pages. 
+Finally, if no Proc or only Proc with arity equal 0 are found at :if or :last_change_at,
+the http_cache filter will be prepend to your filter chain. This behavior is
+desired when rendering static pages. 
 
 To avoid entering the same values in all :last_change_at through your controllers, you can do:
 
