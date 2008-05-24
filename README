@@ -12,6 +12,19 @@ Allows Rails applications to use HTTP 1.1 cache specifications easily:
   class ListsController < ApplicationController
     http_cache :index, :show
   end
+  
+Options:
+
+  :last_change_at => Anything that responds_to :to_time. It accepts an Array and
+                     Procs also (it runs through the array and process all Procs)
+
+  :etag => Anything that responds_to :to_s and Procs
+
+  :namespace => Anything that responds_to :to_s and Procs
+
+  :if => Accepts Procs
+
+  :unless => Accepts Procs
 
 Install
 -------
@@ -38,13 +51,30 @@ If you do not want to cache json requests, you can simply do:
     http_cache :index, :show, :if => Proc.new { |c| !c.request.format.json? }
   end
 
-Another important example (does not perform cache if flash is not empty):
+Another important example (perform cache only if flash is empty):
 
   class ListsController < ApplicationController
     http_cache :index, :show, :if => Proc.new { |c| c.flash.empty? }
   end
 
-And if you want to expire all http cache before 2008, just do:
+You can also set E-tag:
+
+  class ListsController < ApplicationController
+    http_cache :index, :show, :etag => 'this_will_never_change'
+  end
+
+Or use a Proc to set it:
+
+  class ListsController < ApplicationController
+    http_cache :index, :show, :etag => Proc.new {|c| c.get_instance_variable('@current_user').updated_at.to_f.to_s }
+  end
+
+All etags will be Digested with MD5, so if you want to use a string, feel free to
+put something that matters to you. Another thing about E-tag is that Rails 2.1
+automatically set them, but it only sets it after processing the whole action,
+which is not the case here.
+
+If you want to expire all http cache before 2008, just do:
 
   class ListsController < ApplicationController
     http_cache :index, :show, :last_change_at => Time.utc(2008)
@@ -72,6 +102,24 @@ But, if another request from the same client comes at 10h42, the last change was
 at 10h32, which is newer than the "Last-Modified" field (10h30), so the action
 is performed again and "Last-Modified" field set at 10h42.
 
+Namespaces
+----------
+
+Do you have a page that is different for each user, but has the same url. How
+would you guarantee that they won't see each other page if they are on the same
+computer? Just do:
+
+  class ListsController < ApplicationController
+    http_cache :index, :show, :last_change_at => Time.utc(2008), :namespace => Proc.new{|c| c.get_instance_variable('@current_user').username}
+  end
+
+If the namespace is 'josevalim', the header will be:
+
+  headers['Cache-Control'] = 'private=josevalim, max-age=0, must-revalidate'
+
+The namespace is downcased and any character that doesn't belongs to [a-z] range
+is removed (including spaces).
+
 More examples
 -------------
  
@@ -81,7 +129,7 @@ You can also pass an array at :last_change_at as below:
     http_cache :index, :show, :last_change_at => [ Time.utc(2007,12,27), Proc.new { 10.minutes.ago } ]
   end
 
-This will check which one is the newesr time to compare with the "Last-Modified" field sent by the client.
+This will check which one is the newest time to compare with the "Last-Modified" field sent by the client.
  
 Nonetheless, you can use the Proc to be called within the current controller instance also:
 
@@ -101,15 +149,9 @@ Or a shortcut:
     http_cache :index, :show, :last_change_at => Proc.new {|c| user = c.get_instance_variable('@current_user') ? user.updated_at : false }
   end
 
-If :last_change_at contains any object which is not a Time (or DateTime or Date
-or TimeZone...), the cache is not performed.
+If :last_change_at contains any object that doesn't responds to :to_time the
+cache is not performed.
 
-Finally, if no Proc or only Proc with arity equal 0 are found at :if or :last_change_at,
-the http_cache filter will be prepend to your filter chain. This behavior is
-desired when rendering static pages. 
-
-To avoid entering the same values in all :last_change_at through your controllers, you can do:
-
-  ActionController::Caching::HttpCache.default_last_change_at = Time.utc(2007,12,27)
-  ActionController::Caching::HttpCache.default_last_change_at = [ Time.utc(2007,12,27), 10.minutes.ago ]
-
+Finally, if any Proc or Method with arity > 0 is not found in any key (:etag,
+:last_change_at, :if, :unless) the http_cache filter will be prepend to your
+filter chain. This behavior is desired when rendering static pages.
