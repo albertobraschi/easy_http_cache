@@ -29,7 +29,7 @@ Options:
 Install
 -------
 
-This plugin uses features that only exist on Rails 2.1 and above (including 2.1 RC)
+This plugin uses features that only exist on Rails 2.1 and above
 So if you just want a static copy of the plugin:
 
     cd myapp
