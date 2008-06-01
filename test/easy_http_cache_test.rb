@@ -21,7 +21,7 @@ class HttpCacheTestController < ActionController::Base
 
   http_cache :etag, :etag => Proc.new{ 'ETAG_CACHE' }, :control => :public
   http_cache :namespace, :namespace => Proc.new{ 'José 0 _ 0 vaLim' }, :control => :public
-  http_cache :expires, :expires_in => [Proc.new{ Time.utc(2012) }, Time.utc(2014)]
+  http_cache :expires, :expires_in => [Proc.new{ 1.year.from_now }, Time.utc(2014)]
 
   def index
     render :text => '200 OK', :status => 200

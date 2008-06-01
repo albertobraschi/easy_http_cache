@@ -77,14 +77,14 @@ If you do not want to cache json requests, you can simply do:
 Another important example (perform cache only if flash is empty):
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :if => Proc.new { |c| c.flash.empty? }
+    http_cache :index, :show, :if => Proc.new { |c| c.send(:flash).empty? }
   end
 
 You can easily set Expires header to expire all cache 1 hour after
 the request:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :expires_in => 1.hour.from_now
+    http_cache :index, :show, :expires_in => Proc.new { 1.hour.from_now }
   end
 
 You can also set Etag, responding with a public cache:
