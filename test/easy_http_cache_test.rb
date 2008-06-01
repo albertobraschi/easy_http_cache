@@ -19,8 +19,9 @@ class HttpCacheTestController < ActionController::Base
   http_cache :destroy, :last_change_at => [2.hours.ago, Proc.new{|c| 30.minutes.ago }]
   http_cache :invalid, :last_change_at => [2.hours.ago, false]
 
-  http_cache :etag, :etag => Proc.new{ 'ETAG_CACHE' }
-  http_cache :namespace, :namespace => Proc.new{ 'José 0 _ 0 vaLim' }
+  http_cache :etag, :etag => Proc.new{ 'ETAG_CACHE' }, :control => :public
+  http_cache :namespace, :namespace => Proc.new{ 'José 0 _ 0 vaLim' }, :control => :public
+  http_cache :expires, :expires_in => [Proc.new{ Time.utc(2012) }, Time.utc(2014)]
 
   def index
     render :text => '200 OK', :status => 200
@@ -36,6 +37,7 @@ class HttpCacheTestController < ActionController::Base
   alias_method :invalid, :index
   alias_method :etag, :index
   alias_method :namespace, :index
+  alias_method :expires, :index
 
   protected
   def set_perform
@@ -111,7 +113,7 @@ class HttpCacheTest < Test::Unit::TestCase
     assert_equal '200 OK', @response.headers['Status']
   end
 
-  def test_http_cache_should_not_perform
+  def test_http_cache_should_not_perform_with_invalid_last_change_at
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
     get :invalid
     assert_equal '200 OK', @response.headers['Status']
@@ -147,7 +149,7 @@ class HttpCacheTest < Test::Unit::TestCase
   def test_http_etag_cache
     get :etag
     assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
+    assert_equal 'public, max-age=0, must-revalidate', @response.headers['Cache-Control']
     assert @response.headers['ETag']
     reset!
 
@@ -160,7 +162,7 @@ class HttpCacheTest < Test::Unit::TestCase
     @request.env['ETag'] = 'ETAG_CACHE'
     get :etag
     assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
+    assert_equal 'public, max-age=0, must-revalidate', @response.headers['Cache-Control']
     assert @response.headers['ETag']
   end
 
@@ -175,6 +177,13 @@ class HttpCacheTest < Test::Unit::TestCase
     assert_equal '200 OK', @response.headers['Status']
     assert_equal 'private=jos0_0valim, max-age=0, must-revalidate', @response.headers['Cache-Control']
     assert @response.headers['Last-Modified']
+  end
+
+  def test_expires_in
+    get :expires
+    assert_equal '200 OK', @response.headers['Status']
+    assert_equal 'public', @response.headers['Cache-Control']
+    assert_equal 'Wed, 01 Jan 2014 00:00:00 GMT', @response.headers['Expires']
   end
 
   private

@@ -13,7 +13,7 @@ module ActionController #:nodoc:
           options = actions.extract_options!
           options_with_complex_proc = has_complex_proc?(options)
 
-          http_cache_filter = HttpCacheFilter.new(:last_change_at => options.delete(:last_change_at), :etag => options.delete(:etag), :namespace => options.delete(:namespace))
+          http_cache_filter = HttpCacheFilter.new(:control => options.delete(:control), :expires_in => options.delete(:expires_in), :last_change_at => options.delete(:last_change_at), :etag => options.delete(:etag), :namespace => options.delete(:namespace))
           filter_options = {:only => actions}.merge(options)
 
           if options_with_complex_proc
@@ -45,8 +45,8 @@ module ActionController #:nodoc:
 
           # If we have :etag but not :last_change_at we don't perform time cache
           # We also must have HTTP_IF_MODIFIED_SINCE in the header and a valid max_last_change_at
-          if !@options[:etag] || @options[:last_change_at]
-            @max_last_change_at = get_max_last_change_at(@options[:last_change_at], controller)
+          if @options[:last_change_at] || (!@options[:etag] && !@options[:expires_in])
+            @max_last_change_at = get_time_array_last(@options[:last_change_at], controller, true)
             perform_time_cache = @max_last_change_at && controller.request.env['HTTP_IF_MODIFIED_SINCE']
           end
 
@@ -64,19 +64,22 @@ module ActionController #:nodoc:
 
         def after(controller)
           return unless controller.request.get? && controller.response.headers['Status'].to_i == 200
-          controller.response.headers['Cache-Control'] = "#{private_namespace(@options[:namespace], controller)}, max-age=0, must-revalidate" if @max_last_change_at || @digested_etag 
+          expires, control = nil, nil
+
           controller.response.headers['Last-Modified'] = Time.now.httpdate if @max_last_change_at
           controller.response.headers['ETag'] = @digested_etag if @digested_etag
+          controller.response.headers['Expires'] = expires.httpdate if expires = get_time_array_last(@options[:expires_in], controller)
+          controller.response.headers['Cache-Control'] = control if control = control_with_namespace(@options, controller)
         end
 
         protected
         # Get newest time from @last_changes (sent through :last_change_at)
         # Set http_cache_allowed to false if any sent object does not respond to :to_time
-        def get_max_last_change_at(last_changes, controller)
-          processed_last_changes = [last_changes].flatten.compact.collect{|item| evaluate_method(item, controller) }
-          processed_last_changes << Time.utc(0)
-          if all_valid?(processed_last_changes)
-            return processed_last_changes.map(&:to_time).map(&:utc).sort.last
+        def get_time_array_last(time_array, controller, append_zero = false)
+          processed_time_array = [time_array].flatten.compact.collect{|item| evaluate_method(item, controller) }
+          processed_time_array << Time.utc(0) if append_zero
+          if all_valid?(processed_time_array)
+            return processed_time_array.map(&:to_time).map(&:utc).sort.last
           else
             return nil
           end
@@ -89,11 +92,26 @@ module ActionController #:nodoc:
         def all_valid?(array = [])
           array.select{|item| !item.respond_to?(:to_time)}.empty?
         end
-        
-        def private_namespace(object, controller)
-          object ? 'private='+evaluate_method(object, controller).to_s.downcase.gsub!(/[^a-z0-9_]/im,'') : 'private'
+
+        def control_with_namespace(options, controller)
+          control = nil
+          if options[:namespace]
+            control = "private=#{evaluate_method(options[:namespace], controller).to_s.downcase.gsub(/[^a-z0-9_]/im,'')}"
+          elsif options[:control]
+            control = options[:control].to_s
+          end
+
+          headers = controller.response.headers
+          if headers['ETag'] || headers['Last-Modified']
+            return "#{control || 'private'}, max-age=0, must-revalidate"
+          elsif headers['Expires']
+            return (control || 'public')
+          else
+            return control
+          end
         end
       end
+
     end
   end
 end

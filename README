@@ -12,24 +12,47 @@ Allows Rails applications to use HTTP 1.1 cache specifications easily:
   class ListsController < ApplicationController
     http_cache :index, :show
   end
+
+It accpets a wide range of options used to manipulate your cache headers:
+
+  :last_change_at
+    Used to manipulate Last-Modified header.
+    It accepts anything that responds to the method :to_time. Accepts
+    also Proc or Method if the result is a Time object. At least, you
+    can pass an array and it will get the newest time from it to compare
+    with the time sent by the client.
+
+  :etag
+    Used to manipulate Etag header.
+    It accepts anything that responds to the method :to_s. It also accepts
+    Proc or Method if they return a String object. Does not accept Array.
+
+  :namespace
+    It adds user control to cache responding with "private=namespace".
+    It accepts anything that responds to the method :to_s. It also accepts
+    Proc or Method if they return a String object. Does not accept Array.
   
-Options:
+  :expires_in
+    Used to manipulate Expires header.
+    It accepts anything that responds to the method :to_time. Accepts
+    also Proc or Method if the result is a Time object. At least, you
+    can pass an array and it will get the newest time from it to send
+    to the client.
+  
+  :control
+    Specifies Cache-Control header, accepts :public or :private
+    If doesn't specified, doesn't change the header.
 
-  :last_change_at => Anything that responds_to :to_time. It accepts an Array and
-                     Procs also (it runs through the array and process all Procs)
+  :if
+    Only perform http cache if the result of the Proc or Method sent is true
 
-  :etag => Anything that responds_to :to_s and Procs
-
-  :namespace => Anything that responds_to :to_s and Procs
-
-  :if => Accepts Procs
-
-  :unless => Accepts Procs
+  :unless
+    Only perform http cache if the result of the Proc or Method sent is false
 
 Install
 -------
 
-This plugin uses features that only exist on Rails 2.1 and above
+This plugin uses features that only exist on Rails 2.1 and above.
 So if you just want a static copy of the plugin:
 
     cd myapp
@@ -57,10 +80,17 @@ Another important example (perform cache only if flash is empty):
     http_cache :index, :show, :if => Proc.new { |c| c.flash.empty? }
   end
 
-You can also set E-tag:
+You can easily set Expires header to expire all cache 1 hour after
+the request:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :etag => 'this_will_never_change'
+    http_cache :index, :show, :expires_in => 1.hour.from_now
+  end
+
+You can also set Etag, responding with a public cache:
+
+  class ListsController < ApplicationController
+    http_cache :index, :show, :etag => 'this_will_never_change', :control => :public
   end
 
 Or use a Proc to set it:
