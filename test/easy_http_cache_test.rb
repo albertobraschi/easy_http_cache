@@ -21,7 +21,7 @@ class HttpCacheTestController < ActionController::Base
 
   http_cache :etag, :etag => Proc.new{ 'ETAG_CACHE' }, :control => :public
   http_cache :namespace, :namespace => Proc.new{ 'José 0 _ 0 vaLim' }, :control => :public
-  http_cache :expires, :expires_in => [Proc.new{ 1.year.from_now }, Time.utc(2014)]
+  http_cache :expires, :expires_in => [Time.utc(2014), Time.utc(2020)]
 
   def index
     render :text => '200 OK', :status => 200
@@ -175,7 +175,7 @@ class HttpCacheTest < Test::Unit::TestCase
   def test_private_namespace
     get :namespace
     assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'private=jos0_0valim, max-age=0, must-revalidate', @response.headers['Cache-Control']
+    assert_equal 'private=(Jos 0 _ 0 vaLim), max-age=0, must-revalidate', @response.headers['Cache-Control']
     assert @response.headers['Last-Modified']
   end
 

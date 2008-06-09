@@ -18,30 +18,30 @@ It accpets a wide range of options used to manipulate your cache headers:
   :last_change_at
     Used to manipulate Last-Modified header.
     It accepts anything that responds to the method :to_time. Accepts
-    also Proc or Method if the result is a Time object. At least, you
-    can pass an array and it will get the newest time from it to compare
-    with the time sent by the client.
+    also Proc if the result is a Time object. At least, you can pass
+    an array and it will get the newest time from it to compare with
+    the time sent by the client.
 
   :etag
     Used to manipulate Etag header.
     It accepts anything that responds to the method :to_s. It also accepts
-    Proc or Method if they return a String object. Does not accept Array.
+    Proc if they return a String object. Does not accept Array.
 
   :namespace
     It adds user control to cache responding with "private=namespace".
     It accepts anything that responds to the method :to_s. It also accepts
-    Proc or Method if they return a String object. Does not accept Array.
+    Proc if they return a String object. Does not accept Array.
   
   :expires_in
     Used to manipulate Expires header.
     It accepts anything that responds to the method :to_time. Accepts
-    also Proc or Method if the result is a Time object. At least, you
-    can pass an array and it will get the newest time from it to send
-    to the client.
+    also Proc if the result is a Time object. At least, you can pass
+    an array and it will get the closest time to send to the client
+    (but it does not check if the time was already passed).
   
   :control
     Specifies Cache-Control header, accepts :public or :private
-    If doesn't specified, doesn't change the header.
+    If it's not specified, doesn't change the header.
 
   :if
     Only perform http cache if the result of the Proc or Method sent is true
@@ -145,10 +145,10 @@ computer? Just do:
 
 If the namespace is 'josevalim', the header will be:
 
-  headers['Cache-Control'] = 'private=josevalim, max-age=0, must-revalidate'
+  headers['Cache-Control'] = 'private=(josevalim), max-age=0, must-revalidate'
 
-The namespace is downcased and any character that doesn't belongs to [a-z] range
-is removed (including spaces).
+The namespace only accepts some [a-z], [A-Z], single spaces, dot (.),
+line (-) and underline (_). It's also case sensitive.
 
 More examples
 -------------

@@ -46,7 +46,7 @@ module ActionController #:nodoc:
           # If we have :etag but not :last_change_at we don't perform time cache
           # We also must have HTTP_IF_MODIFIED_SINCE in the header and a valid max_last_change_at
           if @options[:last_change_at] || (!@options[:etag] && !@options[:expires_in])
-            @max_last_change_at = get_time_array_last(@options[:last_change_at], controller, true)
+            @max_last_change_at = get_time_array(:last, @options[:last_change_at], controller, true)
             perform_time_cache = @max_last_change_at && controller.request.env['HTTP_IF_MODIFIED_SINCE']
           end
 
@@ -68,18 +68,18 @@ module ActionController #:nodoc:
 
           controller.response.headers['Last-Modified'] = Time.now.httpdate if @max_last_change_at
           controller.response.headers['ETag'] = @digested_etag if @digested_etag
-          controller.response.headers['Expires'] = expires.httpdate if expires = get_time_array_last(@options[:expires_in], controller)
+          controller.response.headers['Expires'] = expires.httpdate if expires = get_time_array(:first, @options[:expires_in], controller)
           controller.response.headers['Cache-Control'] = control if control = control_with_namespace(@options, controller)
         end
 
         protected
-        # Get newest time from @last_changes (sent through :last_change_at)
-        # Set http_cache_allowed to false if any sent object does not respond to :to_time
-        def get_time_array_last(time_array, controller, append_zero = false)
+        # Get first or last time an array with Time or Procs that return Time objects
+        #
+        def get_time_array(first_or_last, time_array, controller, append_zero = false)
           processed_time_array = [time_array].flatten.compact.collect{|item| evaluate_method(item, controller) }
           processed_time_array << Time.utc(0) if append_zero
           if all_valid?(processed_time_array)
-            return processed_time_array.map(&:to_time).map(&:utc).sort.last
+            return processed_time_array.map(&:to_time).map(&:utc).sort.send(first_or_last)
           else
             return nil
           end
@@ -96,7 +96,7 @@ module ActionController #:nodoc:
         def control_with_namespace(options, controller)
           control = nil
           if options[:namespace]
-            control = "private=#{evaluate_method(options[:namespace], controller).to_s.downcase.gsub(/[^a-z0-9_]/im,'')}"
+            control = "private=(#{evaluate_method(options[:namespace], controller).to_s.gsub(/\s+/,' ').gsub(/[^a-zA-Z0-9_\-\.\s]/,'')})"
           elsif options[:control]
             control = options[:control].to_s
           end
