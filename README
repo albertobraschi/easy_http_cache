@@ -13,41 +13,43 @@ Allows Rails applications to use HTTP 1.1 cache specifications easily:
     http_cache :index, :show
   end
 
-It accpets a wide range of options used to manipulate your cache headers:
+It accepts a wide range of options used to manipulate your cache
+headers. Those options usually accepts also Proc, Method and Symbols
+that are evaluated within the current controller and must return the
+specified in which option. You can also pass Arrays, except when is
+said otherwise.
 
   :last_change_at
     Used to manipulate Last-Modified header.
-    It accepts anything that responds to the method :to_time. Accepts
-    also Proc if the result is a Time object. At least, you can pass
-    an array and it will get the newest time from it to compare with
-    the time sent by the client.
+    It accepts anything that responds to the method :to_time.
+    At least, you can pass an Array and it will get the newest time
+    from it to compare with the time sent by the client.
 
   :etag
     Used to manipulate Etag header.
-    It accepts anything that responds to the method :to_s. It also accepts
-    Proc if they return a String object. Does not accept Array.
+    It accepts anything that responds to the method :to_s.
+    Does not accept Array.
 
   :namespace
-    It adds user control to cache responding with "private=namespace".
-    It accepts anything that responds to the method :to_s. It also accepts
-    Proc if they return a String object. Does not accept Array.
+    It adds user control to cache responding with "private=(namespace)".
+    It accepts anything that responds to the method :to_s.
+    Does not accept Array.
   
   :expires_in
     Used to manipulate Expires header.
-    It accepts anything that responds to the method :to_time. Accepts
-    also Proc if the result is a Time object. At least, you can pass
-    an array and it will get the closest time to send to the client
-    (but it does not check if the time was already passed).
+    It accepts anything that responds to the method :to_time.
+    At least, you can pass an Array and it will get the closest time
+    from it to send to the client.
   
   :control
-    Specifies Cache-Control header, accepts :public or :private
+    Specifies Cache-Control header, accepts ONLY :public or :private
     If it's not specified, doesn't change the header.
 
   :if
-    Only perform http cache if the result of the Proc or Method sent is true
+    Only perform http cache if the result of the Proc, Method or Symbol is true
 
   :unless
-    Only perform http cache if the result of the Proc or Method sent is false
+    Only perform http cache if the result of the Proc, Method or Symbol is false
 
 Install
 -------
@@ -179,9 +181,5 @@ Or a shortcut:
     http_cache :index, :show, :last_change_at => Proc.new {|c| user = c.get_instance_variable('@current_user') ? user.updated_at : false }
   end
 
-If :last_change_at contains any object that doesn't responds to :to_time the
-cache is not performed.
-
-Finally, if any Proc or Method with arity > 0 is not found in any key (:etag,
-:last_change_at, :if, :unless) the http_cache filter will be prepend to your
-filter chain. This behavior is desired when rendering static pages.
+If :last_change_at or :expires_in contains any object that doesn't
+responds to :to_time the cache is not performed.

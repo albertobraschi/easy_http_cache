@@ -21,7 +21,7 @@ class HttpCacheTestController < ActionController::Base
 
   http_cache :etag, :etag => Proc.new{ 'ETAG_CACHE' }, :control => :public
   http_cache :namespace, :namespace => Proc.new{ 'José 0 _ 0 vaLim' }, :control => :public
-  http_cache :expires, :expires_in => [Time.utc(2014), Time.utc(2020)]
+  http_cache :expires, :expires_in => [:some_time_from_now, Time.utc(2020)]
 
   def index
     render :text => '200 OK', :status => 200
@@ -43,32 +43,15 @@ class HttpCacheTestController < ActionController::Base
   def set_perform
     @filter_performed = true
   end
+
+  def some_time_from_now
+    Time.utc(2014)
+  end
 end
 
 class HttpCacheTest < Test::Unit::TestCase
   def setup
     reset!
-  end
-
-  def test_append_filter
-    @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
-    get :index
-    assert_nil @controller.filter_performed
-    reset!
-
-    @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
-    get :show
-    assert @controller.filter_performed
-    reset!
-
-    @request.env['HTTP_IF_MODIFIED_SINCE'] = 30.seconds.ago.httpdate
-    get :edit
-    assert_nil @controller.filter_performed
-    reset!
-
-    @request.env['HTTP_IF_MODIFIED_SINCE'] = 30.seconds.ago.httpdate
-    get :destroy
-    assert @controller.filter_performed
   end
 
   def test_simple_http_cache_process

@@ -7,29 +7,15 @@ module ActionController #:nodoc:
 
       module ClassMethods
         # Declares that +actions+ should be cached.
-        # If none "complex Proc" (i.e. arity > 0) is detected in :last_change_at and, prepends the cache filter (this works as Rails caches_page).
+        #
         def http_cache(*actions)
           return unless perform_caching
           options = actions.extract_options!
-          options_with_complex_proc = has_complex_proc?(options)
 
           http_cache_filter = HttpCacheFilter.new(:control => options.delete(:control), :expires_in => options.delete(:expires_in), :last_change_at => options.delete(:last_change_at), :etag => options.delete(:etag), :namespace => options.delete(:namespace))
           filter_options = {:only => actions}.merge(options)
 
-          if options_with_complex_proc
-            around_filter(http_cache_filter, filter_options)
-          else
-            prepend_around_filter(http_cache_filter, filter_options)
-          end
-        end
-
-        private 
-        # Returns true if the given collection of object has or is a Proc or a Method with arity > 0
-        def has_complex_proc?(collection) #:nodoc:
-          collection.each do |key, object|
-            return true if !Array(object).select{|item| item.is_a?(Proc) || item.is_a?(Method) ? item.arity > 0 : false}.empty?
-          end
-          return false
+          around_filter(http_cache_filter, filter_options)
         end
       end
 
@@ -85,8 +71,18 @@ module ActionController #:nodoc:
           end
         end
 
-        def evaluate_method(item, controller)
-          item.is_a?(Proc) || item.is_a?(Method) ? (item.arity > 0 ? item.call(controller) : item.call ) : item  
+        def evaluate_method(method, *args)
+          case method
+            when Symbol
+              object = args.shift
+              object.send(method, *args)
+            when String
+              eval(method, args.first.instance_eval { binding })
+            when Proc, Method
+              method.call(*args)
+            else
+              method
+            end
         end
 
         def all_valid?(array = [])
