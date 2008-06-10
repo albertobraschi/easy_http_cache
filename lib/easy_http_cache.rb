@@ -12,7 +12,13 @@ module ActionController #:nodoc:
           return unless perform_caching
           options = actions.extract_options!
 
-          http_cache_filter = HttpCacheFilter.new(:control => options.delete(:control), :expires_in => options.delete(:expires_in), :last_change_at => options.delete(:last_change_at), :etag => options.delete(:etag), :namespace => options.delete(:namespace))
+          http_cache_filter = HttpCacheFilter.new(
+            :control => options.delete(:control),
+            :expires_in => options.delete(:expires_in),
+            :last_change_at => options.delete(:last_change_at),
+            :etag => options.delete(:etag),
+            :namespace => options.delete(:namespace)
+          )
           filter_options = {:only => actions}.merge(options)
 
           around_filter(http_cache_filter, filter_options)
@@ -29,14 +35,19 @@ module ActionController #:nodoc:
         def before(controller)
           return unless controller.request.get?
 
-          # If we have :etag but not :last_change_at we don't perform time cache
-          # We also must have HTTP_IF_MODIFIED_SINCE in the header and a valid max_last_change_at
+          # We perform :last_change_at when it is set or when another cache
+          # mechanism, i.e. :etag or :expires_in is set also.
+          #
+          # We also must have HTTP_IF_MODIFIED_SINCE in the header and a valid
+          # max_last_change_at
+          #
           if @options[:last_change_at] || (!@options[:etag] && !@options[:expires_in])
-            @max_last_change_at = get_time_array(:last, @options[:last_change_at], controller, true)
+            @max_last_change_at = get_from_time_array(:last, @options[:last_change_at], controller, true)
             perform_time_cache = @max_last_change_at && controller.request.env['HTTP_IF_MODIFIED_SINCE']
           end
 
           # If we have :etag and HTTP_IF_NONE_MATCH in the header we perform etag cache
+          #
           if @options[:etag]
             @digested_etag = %("#{Digest::MD5.hexdigest(evaluate_method(@options[:etag], controller).to_s)}")
             perform_etag_cache = controller.request.env['HTTP_IF_NONE_MATCH']
@@ -54,21 +65,17 @@ module ActionController #:nodoc:
 
           controller.response.headers['Last-Modified'] = Time.now.httpdate if @max_last_change_at
           controller.response.headers['ETag'] = @digested_etag if @digested_etag
-          controller.response.headers['Expires'] = expires.httpdate if expires = get_time_array(:first, @options[:expires_in], controller)
+          controller.response.headers['Expires'] = expires.httpdate if expires = get_from_time_array(:first, @options[:expires_in], controller)
           controller.response.headers['Cache-Control'] = control if control = control_with_namespace(@options, controller)
         end
 
         protected
-        # Get first or last time an array with Time or Procs that return Time objects
+        # Get first or last time an array with Time objects
         #
-        def get_time_array(first_or_last, time_array, controller, append_zero = false)
-          processed_time_array = [time_array].flatten.compact.collect{|item| evaluate_method(item, controller) }
-          processed_time_array << Time.utc(0) if append_zero
-          if all_valid?(processed_time_array)
-            return processed_time_array.map(&:to_time).map(&:utc).sort.send(first_or_last)
-          else
-            return nil
-          end
+        def get_from_time_array(first_or_last, array, controller, append_zero = false)
+          evaluated_array = [array].flatten.compact.collect{ |item| evaluate_method(item, controller) }
+          evaluated_array << Time.utc(0) if append_zero
+          return extract_time(evaluated_array).sort.send(first_or_last)
         end
 
         def evaluate_method(method, *args)
@@ -85,8 +92,23 @@ module ActionController #:nodoc:
             end
         end
 
-        def all_valid?(array = [])
-          array.select{|item| !item.respond_to?(:to_time)}.empty?
+        # Extract times from an array.
+        # It will search for :to_time or :updated_at or :updated_on methods.
+        #
+        # Converts all times to UTC.
+        #
+        def extract_time(array = [])
+          array.collect do |item|
+            if item.respond_to?(:to_time)
+              item.to_time.utc
+            elsif item.respond_to?(:updated_at)
+              item.updated_at.utc
+            elsif item.respond_to?(:updated_on)
+              item.updated_on.utc
+            else
+              nil
+            end
+          end.compact
         end
 
         def control_with_namespace(options, controller)

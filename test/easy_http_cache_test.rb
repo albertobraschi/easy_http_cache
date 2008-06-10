@@ -1,5 +1,6 @@
 # Those lines are plugin test settings
 ENV["RAILS_ENV"] = "test"
+require 'ostruct'
 require File.dirname(__FILE__) + '/../../../../config/environment'
 require File.dirname(__FILE__) + '/../lib/easy_http_cache.rb'
 require 'test_help'
@@ -17,11 +18,12 @@ class HttpCacheTestController < ActionController::Base
   http_cache :show, :last_change_at => 2.hours.ago, :if => Proc.new { |c| !c.request.format.json? }
   http_cache :edit, :last_change_at => Proc.new{ 30.minutes.ago }
   http_cache :destroy, :last_change_at => [2.hours.ago, Proc.new{|c| 30.minutes.ago }]
-  http_cache :invalid, :last_change_at => [2.hours.ago, false]
+  http_cache :invalid, :last_change_at => [1.hours.ago, false]
 
   http_cache :etag, :etag => Proc.new{ 'ETAG_CACHE' }, :control => :public
   http_cache :namespace, :namespace => Proc.new{ 'José 0 _ 0 vaLim' }, :control => :public
   http_cache :expires, :expires_in => [:some_time_from_now, Time.utc(2020)]
+  http_cache :resources, :last_change_at => [:item, :list]
 
   def index
     render :text => '200 OK', :status => 200
@@ -38,6 +40,7 @@ class HttpCacheTestController < ActionController::Base
   alias_method :etag, :index
   alias_method :namespace, :index
   alias_method :expires, :index
+  alias_method :resources, :index
 
   protected
   def set_perform
@@ -46,6 +49,18 @@ class HttpCacheTestController < ActionController::Base
 
   def some_time_from_now
     Time.utc(2014)
+  end
+  
+  def item
+    item = OpenStruct.new
+    item.updated_at = 2.hours.ago
+    item
+  end
+  
+  def list
+    list = OpenStruct.new
+    list.updated_on = 30.minutes.ago
+    list
   end
 end
 
@@ -64,6 +79,14 @@ class HttpCacheTest < Test::Unit::TestCase
 
   def test_http_cache_process_with_array
     http_cache_process(:destroy,15.minutes.ago,45.minutes.ago)
+  end
+  
+  def test_http_cache_process_with_resources
+    http_cache_process(:resources,15.minutes.ago,45.minutes.ago)
+  end
+  
+  def test_http_cache_process_with_invalid_input
+    http_cache_process(:invalid,30.minutes.ago,90.minutes.ago)
   end
 
   def test_http_cache_without_expiration_time
@@ -94,13 +117,6 @@ class HttpCacheTest < Test::Unit::TestCase
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
     get :show
     assert_equal '200 OK', @response.headers['Status']
-  end
-
-  def test_http_cache_should_not_perform_with_invalid_last_change_at
-    @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
-    get :invalid
-    assert_equal '200 OK', @response.headers['Status']
-    assert_nil @response.headers['Last-Modified']
   end
 
   def test_http_cache_should_not_perform_with_post

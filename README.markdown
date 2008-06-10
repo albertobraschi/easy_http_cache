@@ -2,7 +2,7 @@ Copyright (c) 2008 José Valim (jose.valim at gmail dot com)
 Site: http://www.pagestacker.com/
 Blog: http://josevalim.blogspot.com/
 License: MIT
-Version: 1.0
+Version: 1.2
 
 Description
 -----------
@@ -21,7 +21,8 @@ said otherwise.
 
   :last_change_at
     Used to manipulate Last-Modified header.
-    It accepts anything that responds to the method :to_time.
+    It accepts anything that responds to the method :to_time,
+    :updated_at or :updated_on, allowing also to pass resources.
     At least, you can pass an Array and it will get the newest time
     from it to compare with the time sent by the client.
 
@@ -89,24 +90,16 @@ the request:
     http_cache :index, :show, :expires_in => Proc.new { 1.hour.from_now }
   end
 
-You can also set Etag, responding with a public cache:
+And you can also set :etag header (it also accepts Procs):
 
   class ListsController < ApplicationController
     http_cache :index, :show, :etag => 'this_will_never_change', :control => :public
   end
 
-Or use a Proc to set it:
+All etags will be Digested with MD5, so if you want to use a string,
+feel free to put something that matters to you.
 
-  class ListsController < ApplicationController
-    http_cache :index, :show, :etag => Proc.new {|c| c.get_instance_variable('@current_user').updated_at.to_f.to_s }
-  end
-
-All etags will be Digested with MD5, so if you want to use a string, feel free to
-put something that matters to you. Another thing about E-tag is that Rails 2.1
-automatically set them, but it only sets it after processing the whole action,
-which is not the case here.
-
-If you want to expire all http cache before 2008, just do:
+Or if you want to expire all http cache before 2008, just do:
 
   class ListsController < ApplicationController
     http_cache :index, :show, :last_change_at => Time.utc(2008)
@@ -134,6 +127,36 @@ But, if another request from the same client comes at 10h42, the last change was
 at 10h32, which is newer than the "Last-Modified" field (10h30), so the action
 is performed again and "Last-Modified" field set at 10h42.
 
+More examples
+-------------
+
+Now we understand how it works, we can do even more dynamic caches!
+
+So, if You want to cache a list and automatically expire the cache when
+it changes, just do:
+
+  class ListsController < ApplicationController
+    http_cache :index, :show, :last_change_at => :list
+
+    protected
+    def list
+      @list ||= List.find(params[:id])
+    end
+  end
+
+This will automatically call the list method on your controller, get
+the object @list and call updated_at or updated_on on it.
+
+Finally, you can also pass an array at :last_change_at as below:
+
+  class ListsController < ApplicationController
+    http_cache :index, :show,
+               :last_change_at => [ Time.utc(2007,12,27), Proc.new { 10.minutes.ago } ]
+  end
+
+This will check which one is the newest time to compare with the
+"Last-Modified" field sent by the client.
+
 Namespaces
 ----------
 
@@ -142,7 +165,9 @@ would you guarantee that they won't see each other page if they are on the same
 computer? Just do:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => Time.utc(2008), :namespace => Proc.new{|c| c.get_instance_variable('@current_user').username}
+    http_cache :index, :show,
+               :last_change_at => Time.utc(2008),
+               :namespace => Proc.new{|c| c.get_instance_variable('@current_user').username}
   end
 
 If the namespace is 'josevalim', the header will be:
@@ -151,35 +176,3 @@ If the namespace is 'josevalim', the header will be:
 
 The namespace only accepts some [a-z], [A-Z], single spaces, dot (.),
 line (-) and underline (_). It's also case sensitive.
-
-More examples
--------------
- 
-You can also pass an array at :last_change_at as below:
-
-  class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => [ Time.utc(2007,12,27), Proc.new { 10.minutes.ago } ]
-  end
-
-This will check which one is the newest time to compare with the "Last-Modified" field sent by the client.
- 
-Nonetheless, you can use the Proc to be called within the current controller instance also:
-
-  class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => [ Proc.new {|c| c.get_instance_variable('@current_user').updated_at, Time.utc(2007,12,27), 10.minutes.ago ]
-  end
-
-To avoid errors when @current_user is not defined in the controller, you can do:
-
-  class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => Proc.new {|c| c.get_instance_variable('@current_user'), :if => Proc.new{|c| c.get_instance_variable('@current_user') }
-  end
-
-Or a shortcut:
-
-  class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => Proc.new {|c| user = c.get_instance_variable('@current_user') ? user.updated_at : false }
-  end
-
-If :last_change_at or :expires_in contains any object that doesn't
-responds to :to_time the cache is not performed.
