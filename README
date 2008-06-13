@@ -2,7 +2,7 @@ Copyright (c) 2008 José Valim (jose.valim at gmail dot com)
 Site: http://www.pagestacker.com/
 Blog: http://josevalim.blogspot.com/
 License: MIT
-Version: 1.2
+Version: 1.2.1
 
 You can also read this README in pretty html checking the Wiki page
 at GitHub:
@@ -36,20 +36,32 @@ said otherwise.
     It accepts anything that responds to the method :to_s.
     Does not accept Array.
 
+  :expires_at
+    Used to manipulate Expires header.
+    It accepts anything that responds to the method :to_time.
+    You can also pass an Array and it will get the closest time to
+    the current time and send it to the client.
+
+  :expires_in
+    Used to manipulate Expires header.
+    It accepts an interval that will be add to Time.now, so it must
+    responds to :to_i.
+    You can also pass an Array and it will get the closest time to
+    the current time and send it to the client.
+
+  If both :expires_in and :expires_at are set, it will get the closest
+  time to the current time between both and send it to the client. In
+  both options, if a time before the current time is sent, it will be
+  discarted (there is not point in set an expired value in Expires).
+
+  :control
+    Specifies Cache-Control header, accepts ONLY :public or :private
+    If it's not specified, doesn't change the header.
+
   :namespace
     It adds user control to cache responding with "private=(namespace)".
     It accepts anything that responds to the method :to_s.
     Does not accept Array.
-  
-  :expires_in
-    Used to manipulate Expires header.
-    It accepts anything that responds to the method :to_time.
-    At least, you can pass an Array and it will get the closest time
-    from it to send to the client.
-  
-  :control
-    Specifies Cache-Control header, accepts ONLY :public or :private
-    If it's not specified, doesn't change the header.
 
   :if
     Only perform http cache if the result of the Proc, Method or Symbol is true
@@ -92,7 +104,13 @@ You can easily set Expires header to expire all cache 1 hour after
 the request:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :expires_in => Proc.new { 1.hour.from_now }
+    http_cache :index, :show, :expires_at => Proc.new { 1.hour.from_now }
+  end
+
+Or in an easier way:
+
+  class ListsController < ApplicationController
+    http_cache :index, :show, :expires_in => 1.hour
   end
 
 And you can also set :etag header (it also accepts Procs):
@@ -116,8 +134,8 @@ Or if you are looking into something more dynamic:
     http_cache :index, :show, :last_change_at => Proc.new{ 10.minutes.ago }
   end
 
-How the last example works?
----------------------------
+How does the last example work?
+-------------------------------
 
 The first time http://www.railsapp.com/lists/index is requested, it renders the
 action normally but adds a "Last-Modified" to your response with the current
@@ -135,7 +153,7 @@ is performed again and "Last-Modified" field set at 10h42.
 More examples
 -------------
 
-Now we understand how it works, we can do even more dynamic caches!
+Now that we understand how it works, we can do even more dynamic caches!
 
 So, if You want to cache a list and automatically expire the cache when
 it changes, just do:

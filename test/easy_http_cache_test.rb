@@ -22,7 +22,9 @@ class HttpCacheTestController < ActionController::Base
 
   http_cache :etag, :etag => Proc.new{ 'ETAG_CACHE' }, :control => :public
   http_cache :namespace, :namespace => Proc.new{ 'José 0 _ 0 vaLim' }, :control => :public
-  http_cache :expires, :expires_in => [:some_time_from_now, Time.utc(2020)]
+  http_cache :expires_in, :expires_in => 10.minutes
+  http_cache :expires_at, :expires_at => [:some_time_from_now, Time.utc(2020)], :expires_in => [20.years, 15.years]
+  http_cache :expires, :expires_at => [:some_time_from_now, Time.utc(0)], :expires_in => [20.years, 10.minutes]
   http_cache :resources, :last_change_at => [:item, :list]
 
   def index
@@ -39,6 +41,8 @@ class HttpCacheTestController < ActionController::Base
   alias_method :invalid, :index
   alias_method :etag, :index
   alias_method :namespace, :index
+  alias_method :expires_in, :index
+  alias_method :expires_at, :index
   alias_method :expires, :index
   alias_method :resources, :index
 
@@ -93,18 +97,23 @@ class HttpCacheTest < Test::Unit::TestCase
     get :index
     assert_equal '200 OK', @response.headers['Status']
     assert @response.headers['Last-Modified']
+    assert_nil @response.headers['Expires']
     reset!
 
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
     get :index
     assert_equal '304 Not Modified', @response.headers['Status']
     assert_nil @response.headers['Last-Modified']
+    assert_nil @response.headers['Etag']
+    assert_nil @response.headers['Expires']
     reset!
 
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 3.hours.ago.httpdate
     get :index
     assert_equal '304 Not Modified', @response.headers['Status']
     assert_nil @response.headers['Last-Modified']
+    assert_nil @response.headers['Etag']
+    assert_nil @response.headers['Expires']
   end
 
   def test_http_cache_with_conditional_options
@@ -119,23 +128,13 @@ class HttpCacheTest < Test::Unit::TestCase
     assert_equal '200 OK', @response.headers['Status']
   end
 
-  def test_http_cache_should_not_perform_with_post
-    post :show
-    assert_equal '200 OK', @response.headers['Status']
-    assert_nil @response.headers['Last-Modified']
-    reset!
-
-    @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
-    post :show
-    assert_equal '200 OK', @response.headers['Status']
-    assert_nil @response.headers['Last-Modified']
-  end
-
   def test_http_cache_should_not_perform_with_500_status
     # It does not send a Last-Modified field
     get :fail
     assert_equal '500 Internal Server Error', @response.headers['Status']
     assert_nil @response.headers['Last-Modified']
+    assert_nil @response.headers['Expires']
+    assert_nil @response.headers['ETag']
     reset!
 
     # But it can process the HTTP_IF_MODIFIED_SINCE 
@@ -143,6 +142,8 @@ class HttpCacheTest < Test::Unit::TestCase
     get :fail
     assert_equal '304 Not Modified', @response.headers['Status']
     assert_nil @response.headers['Last-Modified']
+    assert_nil @response.headers['Expires']
+    assert_nil @response.headers['ETag']
   end
 
   def test_http_etag_cache
@@ -150,12 +151,16 @@ class HttpCacheTest < Test::Unit::TestCase
     assert_equal '200 OK', @response.headers['Status']
     assert_equal 'public, max-age=0, must-revalidate', @response.headers['Cache-Control']
     assert @response.headers['ETag']
+    assert_nil @response.headers['Last-Modified']
+    assert_nil @response.headers['Expires']
     reset!
 
     @request.env['HTTP_IF_NONE_MATCH'] = %("#{Digest::MD5.hexdigest('ETAG_CACHE')}")
     get :etag
     assert_equal '304 Not Modified', @response.headers['Status']
     assert_nil @response.headers['ETag']
+    assert_nil @response.headers['Last-Modified']
+    assert_nil @response.headers['Expires']
     reset!
 
     @request.env['ETag'] = 'ETAG_CACHE'
@@ -163,12 +168,8 @@ class HttpCacheTest < Test::Unit::TestCase
     assert_equal '200 OK', @response.headers['Status']
     assert_equal 'public, max-age=0, must-revalidate', @response.headers['Cache-Control']
     assert @response.headers['ETag']
-  end
-
-  def test_last_modified_is_not_sent_in_etag_cache
-    get :etag
-    assert_equal '200 OK', @response.headers['Status']
     assert_nil @response.headers['Last-Modified']
+    assert_nil @response.headers['Expires']
   end
 
   def test_private_namespace
@@ -176,13 +177,33 @@ class HttpCacheTest < Test::Unit::TestCase
     assert_equal '200 OK', @response.headers['Status']
     assert_equal 'private=(Jos 0 _ 0 vaLim), max-age=0, must-revalidate', @response.headers['Cache-Control']
     assert @response.headers['Last-Modified']
+    assert_nil @response.headers['Expires']
   end
 
-  def test_expires_in
-    get :expires
+  def test_expires_at
+    get :expires_at
     assert_equal '200 OK', @response.headers['Status']
     assert_equal 'public', @response.headers['Cache-Control']
     assert_equal 'Wed, 01 Jan 2014 00:00:00 GMT', @response.headers['Expires']
+    assert_nil @response.headers['Last-Modified']
+  end
+
+  def test_expires_in
+    get :expires_in
+    assert_equal '200 OK', @response.headers['Status']
+    assert_equal 'public', @response.headers['Cache-Control']
+    expires = Time.rfc2822(@response.headers['Expires'])
+    assert expires > 8.minutes.from_now && expires < 12.minutes.from_now
+    assert_nil @response.headers['Last-Modified']
+  end
+  
+  def test_expires_with_time_before_current_time
+    get :expires_in
+    assert_equal '200 OK', @response.headers['Status']
+    assert_equal 'public', @response.headers['Cache-Control']
+    expires = Time.rfc2822(@response.headers['Expires'])
+    assert expires > 8.minutes.from_now && expires < 12.minutes.from_now
+    assert_nil @response.headers['Last-Modified']
   end
 
   private
@@ -206,12 +227,15 @@ class HttpCacheTest < Test::Unit::TestCase
       assert_equal '200 OK', @response.headers['Status']
       assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
       assert @response.headers['Last-Modified']
+      assert_nil @response.headers['Expires']
       reset!
 
       @request.env['HTTP_IF_MODIFIED_SINCE'] = not_expired_time.httpdate
       get action
       assert_equal '304 Not Modified', @response.headers['Status']
       assert_nil @response.headers['Last-Modified']
+      assert_nil @response.headers['Etag']
+      assert_nil @response.headers['Expires']
       reset!
 
       @request.env['HTTP_IF_MODIFIED_SINCE'] = expired_time.httpdate
@@ -219,5 +243,6 @@ class HttpCacheTest < Test::Unit::TestCase
       assert_equal '200 OK', @response.headers['Status']
       assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
       assert @response.headers['Last-Modified']
+      assert_nil @response.headers['Expires']
     end
 end

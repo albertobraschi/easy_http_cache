@@ -15,6 +15,7 @@ module ActionController #:nodoc:
           http_cache_filter = HttpCacheFilter.new(
             :control => options.delete(:control),
             :expires_in => options.delete(:expires_in),
+            :expires_at => options.delete(:expires_at),
             :last_change_at => options.delete(:last_change_at),
             :etag => options.delete(:etag),
             :namespace => options.delete(:namespace)
@@ -33,15 +34,13 @@ module ActionController #:nodoc:
         end
 
         def before(controller)
-          return unless controller.request.get?
-
           # We perform :last_change_at when it is set or when another cache
-          # mechanism, i.e. :etag or :expires_in is set also.
+          # mechanism, i.e. :etag or :expires_in or :expires_at is set also.
           #
           # We also must have HTTP_IF_MODIFIED_SINCE in the header and a valid
           # max_last_change_at
           #
-          if @options[:last_change_at] || (!@options[:etag] && !@options[:expires_in])
+          if @options[:last_change_at] || !(@options[:etag] || @options[:expires_in] || @options[:expires_at])
             @max_last_change_at = get_from_time_array(:last, @options[:last_change_at], controller, true)
             perform_time_cache = @max_last_change_at && controller.request.env['HTTP_IF_MODIFIED_SINCE']
           end
@@ -60,12 +59,12 @@ module ActionController #:nodoc:
         end
 
         def after(controller)
-          return unless controller.request.get? && controller.response.headers['Status'].to_i == 200
+          return unless controller.response.headers['Status'].to_i == 200
           expires, control = nil, nil
 
           controller.response.headers['Last-Modified'] = Time.now.httpdate if @max_last_change_at
           controller.response.headers['ETag'] = @digested_etag if @digested_etag
-          controller.response.headers['Expires'] = expires.httpdate if expires = get_from_time_array(:first, @options[:expires_in], controller)
+          controller.response.headers['Expires'] = expires.httpdate if expires = get_from_time_array(:first, expires_array(@options), controller)
           controller.response.headers['Cache-Control'] = control if control = control_with_namespace(@options, controller)
         end
 
@@ -75,7 +74,7 @@ module ActionController #:nodoc:
         def get_from_time_array(first_or_last, array, controller, append_zero = false)
           evaluated_array = [array].flatten.compact.collect{ |item| evaluate_method(item, controller) }
           evaluated_array << Time.utc(0) if append_zero
-          return extract_time(evaluated_array).sort.send(first_or_last)
+          return extract_time(first_or_last, evaluated_array)
         end
 
         def evaluate_method(method, *args)
@@ -92,14 +91,17 @@ module ActionController #:nodoc:
             end
         end
 
-        # Extract times from an array.
+        # Extract times from an array and get the first or last.
         # It will search for :to_time or :updated_at or :updated_on methods.
         #
         # Converts all times to UTC.
         #
-        def extract_time(array = [])
+        # If we want the :first element from array, we set to nil all times
+        # before the current time.
+        #
+        def extract_time(first_or_last, array = [])
           array.collect do |item|
-            if item.respond_to?(:to_time)
+            item = if item.respond_to?(:to_time)
               item.to_time.utc
             elsif item.respond_to?(:updated_at)
               item.updated_at.utc
@@ -108,7 +110,16 @@ module ActionController #:nodoc:
             else
               nil
             end
-          end.compact
+
+            (first_or_last == :first && item && item < Time.now.utc) ? nil : item
+          end.compact.sort.send(first_or_last)
+        end
+
+        # Get :expires_in and :expires_at and put them together in one array
+        def expires_array(options)
+          expires_in = [@options[:expires_in]].flatten.compact.collect{ |interval| Time.now.utc + interval.to_i }
+          expires_at = [@options[:expires_at]]
+          return (expires_in + expires_at)
         end
 
         def control_with_namespace(options, controller)
