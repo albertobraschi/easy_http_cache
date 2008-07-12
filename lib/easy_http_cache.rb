@@ -52,7 +52,7 @@ module ActionController #:nodoc:
             perform_etag_cache = controller.request.env['HTTP_IF_NONE_MATCH']
           end
 
-          if (perform_time_cache && @max_last_change_at <= Time.rfc2822(controller.request.env['HTTP_IF_MODIFIED_SINCE']).utc) || (perform_etag_cache && @digested_etag == controller.request.headers['HTTP_IF_NONE_MATCH'])
+          if (!component_request?(controller) && perform_time_cache && @max_last_change_at <= Time.rfc2822(controller.request.env['HTTP_IF_MODIFIED_SINCE']).utc) || (perform_etag_cache && @digested_etag == controller.request.headers['HTTP_IF_NONE_MATCH'])
             controller.send!(:render, :text => '304 Not Modified', :status => 304)
             return false
           end
@@ -116,28 +116,38 @@ module ActionController #:nodoc:
         end
 
         # Get :expires_in and :expires_at and put them together in one array
+        #
         def expires_array(options)
           expires_in = [@options[:expires_in]].flatten.compact.collect{ |interval| Time.now.utc + interval.to_i }
           expires_at = [@options[:expires_at]]
           return (expires_in + expires_at)
         end
 
+        # Parses the control option
+        #
         def control_with_namespace(options, controller)
-          control = nil
-          if options[:namespace]
-            control = "private=(#{evaluate_method(options[:namespace], controller).to_s.gsub(/\s+/,' ').gsub(/[^a-zA-Z0-9_\-\.\s]/,'')})"
+          control = if options[:namespace]
+            "private=(#{evaluate_method(options[:namespace], controller).to_s.gsub(/\s+/,' ').gsub(/[^a-zA-Z0-9_\-\.\s]/,'')})"
           elsif options[:control]
-            control = options[:control].to_s
+            options[:control].to_s
+          else
+            nil
           end
 
           headers = controller.response.headers
-          if headers['ETag'] || headers['Last-Modified']
-            return "#{control || 'private'}, max-age=0, must-revalidate"
+          return (if headers['ETag'] || headers['Last-Modified']
+            "#{control || 'private'}, max-age=0, must-revalidate"
           elsif headers['Expires']
-            return (control || 'public')
+            control || 'public'
           else
-            return control
-          end
+            control
+          end)
+        end
+
+        # We should not render http cache when we are using components
+        #
+        def component_request?(controller)
+          controller.instance_variable_get('@parent_controller')
         end
       end
 

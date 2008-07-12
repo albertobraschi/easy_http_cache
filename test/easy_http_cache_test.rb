@@ -47,25 +47,25 @@ class HttpCacheTestController < ActionController::Base
   alias_method :resources, :index
 
   protected
-  def set_perform
-    @filter_performed = true
-  end
+    def set_perform
+      @filter_performed = true
+    end
 
-  def some_time_from_now
-    Time.utc(2014)
-  end
-  
-  def item
-    item = OpenStruct.new
-    item.updated_at = 2.hours.ago
-    item
-  end
-  
-  def list
-    list = OpenStruct.new
-    list.updated_on = 30.minutes.ago
-    list
-  end
+    def some_time_from_now
+      Time.utc(2014)
+    end
+    
+    def item
+      item = OpenStruct.new
+      item.updated_at = 2.hours.ago
+      item
+    end
+    
+    def list
+      list = OpenStruct.new
+      list.updated_on = 30.minutes.ago
+      list
+    end
 end
 
 class HttpCacheTest < Test::Unit::TestCase
@@ -74,23 +74,23 @@ class HttpCacheTest < Test::Unit::TestCase
   end
 
   def test_simple_http_cache_process
-    http_cache_process(:show,1.hour.ago,3.hours.ago)
+    http_cache_process(:show, 1.hour.ago, 3.hours.ago)
   end
 
   def test_http_cache_process_with_proc
-    http_cache_process(:edit,15.minutes.ago,45.minutes.ago)
+    http_cache_process(:edit, 15.minutes.ago, 45.minutes.ago)
   end
 
   def test_http_cache_process_with_array
-    http_cache_process(:destroy,15.minutes.ago,45.minutes.ago)
+    http_cache_process(:destroy, 15.minutes.ago, 45.minutes.ago)
   end
   
   def test_http_cache_process_with_resources
-    http_cache_process(:resources,15.minutes.ago,45.minutes.ago)
+    http_cache_process(:resources, 15.minutes.ago, 45.minutes.ago)
   end
   
-  def test_http_cache_process_with_invalid_input
-    http_cache_process(:invalid,30.minutes.ago,90.minutes.ago)
+  def test_http_cache_process_discards_invalid_input
+    http_cache_process(:invalid, 30.minutes.ago, 90.minutes.ago)
   end
 
   def test_http_cache_without_expiration_time
@@ -206,11 +206,44 @@ class HttpCacheTest < Test::Unit::TestCase
     assert_nil @response.headers['Last-Modified']
   end
 
+  def test_should_not_cache_when_rendering_components
+    set_parent_controller! 
+
+    get :show
+    assert_equal '200 OK', @response.headers['Status']
+    assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
+    assert @response.headers['Last-Modified']
+
+    set_parent_controller!
+
+    @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
+    get :show
+    assert_equal '200 OK', @response.headers['Status']
+    assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
+    assert @response.headers['Last-Modified']
+
+    set_parent_controller!
+
+    @request.env['HTTP_IF_MODIFIED_SINCE'] = 3.hours.ago.httpdate
+    get :show
+    assert_equal '200 OK', @response.headers['Status']
+    assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
+    assert @response.headers['Last-Modified']
+  end
+
   private
     def reset!
       @request = ActionController::TestRequest.new
       @response = ActionController::TestResponse.new
       @controller = HttpCacheTestController.new
+    end
+
+    def set_parent_controller!
+      get :index
+      old_controller = @controller.dup
+      reset!
+
+      @controller.instance_variable_set('@parent_controller', old_controller)
     end
 
     # Goes through a http cache process:
