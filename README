@@ -2,10 +2,9 @@ Copyright (c) 2008 José Valim (jose.valim at gmail dot com)
 Site: http://www.pagestacker.com/
 Blog: http://josevalim.blogspot.com/
 License: MIT
-Version: 1.2.1
+Version: 1.2.2
 
-You can also read this README in pretty html checking the Wiki page
-at GitHub:
+You can also read this README in pretty html at the GitHub project Wiki page
 
   http://github.com/josevalim/easy-http-cache/wikis/home
 
@@ -19,9 +18,9 @@ Allows Rails applications to use HTTP 1.1 cache specifications easily:
   end
 
 It accepts a wide range of options used to manipulate your cache
-headers. Those options usually accepts also Proc, Method and Symbols
+headers. Those options usually accepts Proc, Method and Symbols
 that are evaluated within the current controller and must return the
-specified in which option. You can also pass Arrays, except when is
+specified in which option below. You can also pass Arrays, except when is
 said otherwise.
 
   :last_change_at
@@ -52,7 +51,7 @@ said otherwise.
   If both :expires_in and :expires_at are set, it will get the closest
   time to the current time between both and send it to the client. In
   both options, if a time before the current time is sent, it will be
-  discarted (there is not point in set an expired value in Expires).
+  discarded.
 
   :control
     Specifies Cache-Control header, accepts ONLY :public or :private
@@ -169,6 +168,18 @@ it changes, just do:
 
 This will automatically call the list method on your controller, get
 the object @list and call updated_at or updated_on on it.
+
+If you are using a resource that doesn't respond to updated_at or updated_on,
+you can pass a symbol as parameter in :method, that will be called in your resources:
+
+  class ListsController < ApplicationController
+    http_cache :index, :show, :last_change_at => :list, :method => :cached_at
+
+    protected
+    def list
+      @list ||= List.find(params[:id])
+    end
+  end
 
 Finally, you can also pass an array at :last_change_at as below:
 

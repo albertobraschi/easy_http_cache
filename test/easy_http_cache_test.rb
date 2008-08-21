@@ -25,7 +25,8 @@ class HttpCacheTestController < ActionController::Base
   http_cache :expires_in, :expires_in => 10.minutes
   http_cache :expires_at, :expires_at => [:some_time_from_now, Time.utc(2020)], :expires_in => [20.years, 15.years]
   http_cache :expires, :expires_at => [:some_time_from_now, Time.utc(0)], :expires_in => [20.years, 10.minutes]
-  http_cache :resources, :last_change_at => [:item, :list]
+  http_cache :resources, :last_change_at => [:resource, :list, :object]
+  http_cache :resources_with_method, :last_change_at => [:resource, :list, :object], :method => :cached_at
 
   def index
     render :text => '200 OK', :status => 200
@@ -45,6 +46,7 @@ class HttpCacheTestController < ActionController::Base
   alias_method :expires_at, :index
   alias_method :expires, :index
   alias_method :resources, :index
+  alias_method :resources_with_method, :index
 
   protected
     def set_perform
@@ -55,16 +57,22 @@ class HttpCacheTestController < ActionController::Base
       Time.utc(2014)
     end
     
-    def item
-      item = OpenStruct.new
-      item.updated_at = 2.hours.ago
-      item
+    def resource
+      resource = OpenStruct.new
+      resource.updated_at = 2.hours.ago
+      resource
     end
     
     def list
       list = OpenStruct.new
       list.updated_on = 30.minutes.ago
       list
+    end
+    
+    def object
+      object = OpenStruct.new
+      object.cached_at = 15.minutes.ago
+      object
     end
 end
 
@@ -88,7 +96,11 @@ class HttpCacheTest < Test::Unit::TestCase
   def test_http_cache_process_with_resources
     http_cache_process(:resources, 15.minutes.ago, 45.minutes.ago)
   end
-  
+
+  def test_http_cache_process_with_resources_with_method
+    http_cache_process(:resources_with_method, 10.minutes.ago, 20.minutes.ago)
+  end
+
   def test_http_cache_process_discards_invalid_input
     http_cache_process(:invalid, 30.minutes.ago, 90.minutes.ago)
   end
