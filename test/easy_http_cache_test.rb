@@ -108,24 +108,19 @@ class HttpCacheTest < Test::Unit::TestCase
   def test_http_cache_without_expiration_time
     get :index
     assert_equal '200 OK', @response.headers['Status']
-    assert @response.headers['Last-Modified']
-    assert_nil @response.headers['Expires']
+    assert_equal Time.utc(0).httpdate, @response.headers['Last-Modified']
     reset!
 
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
     get :index
     assert_equal '304 Not Modified', @response.headers['Status']
-    assert_nil @response.headers['Last-Modified']
-    assert_nil @response.headers['Etag']
-    assert_nil @response.headers['Expires']
+    assert_equal Time.utc(0).httpdate, @response.headers['Last-Modified']
     reset!
 
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 3.hours.ago.httpdate
     get :index
     assert_equal '304 Not Modified', @response.headers['Status']
-    assert_nil @response.headers['Last-Modified']
-    assert_nil @response.headers['Etag']
-    assert_nil @response.headers['Expires']
+    assert_equal Time.utc(0).httpdate, @response.headers['Last-Modified']
   end
 
   def test_http_cache_with_conditional_options
@@ -153,7 +148,7 @@ class HttpCacheTest < Test::Unit::TestCase
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
     get :fail
     assert_equal '304 Not Modified', @response.headers['Status']
-    assert_nil @response.headers['Last-Modified']
+    assert @response.headers['Last-Modified']
     assert_nil @response.headers['Expires']
     assert_nil @response.headers['ETag']
   end
@@ -162,26 +157,20 @@ class HttpCacheTest < Test::Unit::TestCase
     get :etag
     assert_equal '200 OK', @response.headers['Status']
     assert_equal 'public, max-age=0, must-revalidate', @response.headers['Cache-Control']
-    assert @response.headers['ETag']
-    assert_nil @response.headers['Last-Modified']
-    assert_nil @response.headers['Expires']
+    assert_equal etag_for('ETAG_CACHE'), @response.headers['ETag']
     reset!
 
-    @request.env['HTTP_IF_NONE_MATCH'] = %("#{Digest::MD5.hexdigest('ETAG_CACHE')}")
+    @request.env['HTTP_IF_NONE_MATCH'] = etag_for('ETAG_CACHE')
     get :etag
     assert_equal '304 Not Modified', @response.headers['Status']
-    assert_nil @response.headers['ETag']
-    assert_nil @response.headers['Last-Modified']
-    assert_nil @response.headers['Expires']
+    assert_equal etag_for('ETAG_CACHE'), @response.headers['ETag']
     reset!
 
     @request.env['ETag'] = 'ETAG_CACHE'
     get :etag
     assert_equal '200 OK', @response.headers['Status']
     assert_equal 'public, max-age=0, must-revalidate', @response.headers['Cache-Control']
-    assert @response.headers['ETag']
-    assert_nil @response.headers['Last-Modified']
-    assert_nil @response.headers['Expires']
+    assert_equal etag_for('ETAG_CACHE'), @response.headers['ETag']
   end
 
   def test_private_namespace
@@ -258,6 +247,10 @@ class HttpCacheTest < Test::Unit::TestCase
       @controller.instance_variable_set('@parent_controller', old_controller)
     end
 
+    def etag_for(string)
+      %("#{Digest::MD5.hexdigest(string)}")
+    end
+
     # Goes through a http cache process:
     #
     #   1. Request an action
@@ -272,15 +265,12 @@ class HttpCacheTest < Test::Unit::TestCase
       assert_equal '200 OK', @response.headers['Status']
       assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
       assert @response.headers['Last-Modified']
-      assert_nil @response.headers['Expires']
       reset!
 
       @request.env['HTTP_IF_MODIFIED_SINCE'] = not_expired_time.httpdate
       get action
       assert_equal '304 Not Modified', @response.headers['Status']
-      assert_nil @response.headers['Last-Modified']
-      assert_nil @response.headers['Etag']
-      assert_nil @response.headers['Expires']
+      assert @response.headers['Last-Modified']
       reset!
 
       @request.env['HTTP_IF_MODIFIED_SINCE'] = expired_time.httpdate
@@ -288,6 +278,5 @@ class HttpCacheTest < Test::Unit::TestCase
       assert_equal '200 OK', @response.headers['Status']
       assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
       assert @response.headers['Last-Modified']
-      assert_nil @response.headers['Expires']
     end
 end

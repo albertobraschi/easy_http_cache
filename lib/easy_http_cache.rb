@@ -53,6 +53,8 @@ module ActionController #:nodoc:
           perform_etag_cache = controller.request.env['HTTP_IF_NONE_MATCH'] && @digested_etag && @digested_etag == controller.request.headers['HTTP_IF_NONE_MATCH']
 
           if !component_request?(controller) && (perform_time_cache || perform_etag_cache)
+            set_headers!(controller)
+
             controller.send!(:render, :text => '304 Not Modified', :status => 304)
             return false
           end
@@ -60,12 +62,7 @@ module ActionController #:nodoc:
 
         def after(controller)
           return unless controller.response.headers['Status'].to_i == 200
-          expires, control = nil, nil
-
-          controller.response.headers['Last-Modified'] = Time.now.utc.httpdate if @max_last_change_at
-          controller.response.headers['ETag'] = @digested_etag if @digested_etag
-          controller.response.headers['Expires'] = expires.httpdate if expires = get_first_or_last_from_time_array(:first, expires_array(@options), controller)
-          controller.response.headers['Cache-Control'] = control if control = control_with_namespace(@options, controller)
+          set_headers!(controller)
         end
 
         protected
@@ -121,20 +118,31 @@ module ActionController #:nodoc:
 
         # Get :expires_in and :expires_at and put them together in one array
         #
-        def expires_array(options)
-          expires_in = [options[:expires_in]].flatten.compact.collect{ |interval| Time.now.utc + interval.to_i }
-          expires_at = [options[:expires_at]]
+        def get_expires_array
+          expires_in = [@options[:expires_in]].flatten.compact.collect{ |interval| Time.now.utc + interval.to_i }
+          expires_at = [@options[:expires_at]]
           return (expires_in + expires_at)
+        end
+
+        # Set HTTP cache headers
+        #
+        def set_headers!(controller)
+          expires, control = nil, nil
+
+          controller.response.headers['Last-Modified'] = @max_last_change_at.httpdate if @max_last_change_at
+          controller.response.headers['ETag'] = @digested_etag if @digested_etag
+          controller.response.headers['Expires'] = expires.httpdate if expires = get_first_or_last_from_time_array(:first, get_expires_array, controller)
+          controller.response.headers['Cache-Control'] = control if control = control_with_namespace(controller)
         end
 
         # Parses the control option
         #
-        def control_with_namespace(options, controller)
-          control = if options[:namespace]
-            namespace = evaluate_method(options[:namespace], controller).to_s.gsub(/\s+/, ' ').gsub(/[^a-zA-Z0-9_\-\.\s]/, '')
+        def control_with_namespace(controller)
+          control = if @options[:namespace]
+            namespace = evaluate_method(@options[:namespace], controller).to_s.gsub(/\s+/, ' ').gsub(/[^a-zA-Z0-9_\-\.\s]/, '')
             "private=(#{namespace})"
-          elsif options[:control]
-            options[:control].to_s
+          elsif @options[:control]
+            @options[:control].to_s
           else
             nil
           end
