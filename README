@@ -54,19 +54,13 @@ said otherwise.
   discarded.
 
   :control
-    Specifies Cache-Control header, accepts ONLY :public or :private
-    If it's not specified, doesn't change the header.
-
-  :namespace
-    It adds user control to cache responding with "private=(namespace)".
-    It accepts anything that responds to the method :to_s.
-    Does not accept Array.
+    Specifies Cache-Control header.
 
   :if
-    Only perform http cache if the result of the Proc, Method or Symbol is true
+    Only perform http cache if the result of the Proc, Method or Symbol is true.
 
   :unless
-    Only perform http cache if the result of the Proc, Method or Symbol is false
+    Only perform http cache if the result of the Proc, Method or Symbol is false.
 
 Install
 -------
@@ -190,23 +184,3 @@ Finally, you can also pass an array at :last_change_at as below:
 
 This will check which one is the newest time to compare with the
 "Last-Modified" field sent by the client.
-
-Namespaces
-----------
-
-Do you have a page that is different for each user, but has the same url. How
-would you guarantee that they won't see each other page if they are on the same
-computer? Just do:
-
-  class ListsController < ApplicationController
-    http_cache :index, :show,
-               :last_change_at => Time.utc(2008),
-               :namespace => Proc.new{|c| c.get_instance_variable('@current_user').username}
-  end
-
-If the namespace is 'josevalim', the header will be:
-
-  headers['Cache-Control'] = 'private=(josevalim), max-age=0, must-revalidate'
-
-The namespace only accepts some [a-z], [A-Z], single spaces, dot (.),
-line (-) and underline (_). It's also case sensitive.

@@ -18,8 +18,7 @@ module ActionController #:nodoc:
             :expires_at => options.delete(:expires_at),
             :last_change_at => options.delete(:last_change_at),
             :method => options.delete(:method),
-            :etag => options.delete(:etag),
-            :namespace => options.delete(:namespace)
+            :etag => options.delete(:etag)
           )
           filter_options = {:only => actions}.merge(options)
 
@@ -138,15 +137,6 @@ module ActionController #:nodoc:
         # Parses the control option
         #
         def control_with_namespace(controller)
-          control = if @options[:namespace]
-            namespace = evaluate_method(@options[:namespace], controller).to_s.gsub(/\s+/, ' ').gsub(/[^a-zA-Z0-9_\-\.\s]/, '')
-            "private=(#{namespace})"
-          elsif @options[:control]
-            @options[:control].to_s
-          else
-            nil
-          end
-
           headers = controller.response.headers
 
           if headers['ETag'] || headers['Last-Modified']
