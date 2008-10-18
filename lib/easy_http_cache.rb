@@ -131,12 +131,12 @@ module ActionController #:nodoc:
           controller.response.headers['Last-Modified'] = @max_last_change_at.httpdate if @max_last_change_at
           controller.response.headers['ETag'] = @digested_etag if @digested_etag
           controller.response.headers['Expires'] = expires.httpdate if expires = get_first_or_last_from_time_array(:first, get_expires_array, controller)
-          controller.response.headers['Cache-Control'] = control if control = control_with_namespace(controller)
+          controller.response.headers['Cache-Control'] = control if control = get_control_by_cache(controller)
         end
 
-        # Parses the control option
+        # Returns the Cache-Control based on the cache being used
         #
-        def control_with_namespace(controller)
+        def get_control_by_cache(controller)
           headers = controller.response.headers
 
           if headers['ETag'] || headers['Last-Modified']
