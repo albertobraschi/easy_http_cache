@@ -36,7 +36,7 @@ module ActionController #:nodoc:
 
         def before(controller)
           # We perform Last-Modified HTTP Cache when the option :last_change_at is sent
-          # or when another cache mechanism is set.
+          # or when another cache mechanism is not set.
           #
           if @options[:last_change_at]
             @max_last_change_at = get_first_or_last_from_time_array(:last, @options[:last_change_at], controller)
@@ -55,7 +55,7 @@ module ActionController #:nodoc:
           if !component_request?(controller) && (perform_time_cache || perform_etag_cache)
             set_headers!(controller)
 
-            controller.send!(:render, :text => '304 Not Modified', :status => 304)
+            controller.__send__(:head, :not_modified)
             return false
           end
         end
@@ -75,13 +75,13 @@ module ActionController #:nodoc:
           evaluated_array = [array].flatten.collect{ |item| evaluate_time(item, controller) }.compact
           evaluated_array = evaluated_array.select{ |time| time > Time.now.utc } if first_or_last == :first
 
-          return evaluated_array.sort.send(first_or_last)
+          return evaluated_array.sort.__send__(first_or_last)
         end
 
         def evaluate_method(method, controller)
           case method
             when Symbol
-              controller.send!(method)
+              controller.__send__(method)
             when String
               eval(method, controller.instance_eval { binding })
             when Proc, Method
@@ -103,7 +103,7 @@ module ActionController #:nodoc:
           return nil unless method
           time = evaluate_method(method, controller)
 
-          time = time.send!(@options[:method]) if @options[:method].is_a?(Symbol) && time.respond_to?(@options[:method])
+          time = time.__send__(@options[:method]) if @options[:method].is_a?(Symbol) && time.respond_to?(@options[:method])
 
           if time.respond_to?(:to_time)
             time.to_time.utc
@@ -169,4 +169,4 @@ module ActionController #:nodoc:
   end
 end
 
-ActionController::Base.send :include, ActionController::Caching::HttpCache
+ActionController::Base.__send__ :include, ActionController::Caching::HttpCache
