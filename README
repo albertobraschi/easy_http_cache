@@ -2,7 +2,7 @@ Copyright (c) 2008 José Valim (jose.valim at gmail dot com)
 Site: http://www.pagestacker.com/
 Blog: http://josevalim.blogspot.com/
 License: MIT
-Version: 1.2.2
+Version: 1.2.3
 
 You can also read this README in pretty html at the GitHub project Wiki page
 
@@ -43,15 +43,14 @@ said otherwise.
 
   :expires_in
     Used to manipulate Expires header.
-    It accepts an interval that will be add to Time.now, so it must
-    responds to :to_i.
+    It accepts an interval that will be add to the current time. It
+    must respond to :to_i.
     You can also pass an Array and it will get the closest time to
     the current time and send it to the client.
 
   If both :expires_in and :expires_at are set, it will get the closest
-  time to the current time between both and send it to the client. In
-  both options, if a time before the current time is sent, it will be
-  discarded.
+  time to the current time and send it to the client. In both options,
+  if a time before the current time is sent, it will be discarded.
 
   :control
     Specifies Cache-Control header.
@@ -112,8 +111,7 @@ And you can also set :etag header (it also accepts Procs):
     http_cache :index, :show, :etag => 'this_will_never_change', :control => :public
   end
 
-All etags will be Digested with MD5, so if you want to use a string,
-feel free to put something that matters to you.
+All etags will be Digested with MD5.
 
 Or if you want to expire all http cache before 2008, just do:
 
@@ -164,7 +162,7 @@ This will automatically call the list method on your controller, get
 the object @list and call updated_at or updated_on on it.
 
 If you are using a resource that doesn't respond to updated_at or updated_on,
-you can pass a symbol as parameter in :method, that will be called in your resources:
+you can pass a method as parameter and it will be called in your resources:
 
   class ListsController < ApplicationController
     http_cache :index, :show, :last_change_at => :list, :method => :cached_at
@@ -182,5 +180,5 @@ Finally, you can also pass an array at :last_change_at as below:
                :last_change_at => [ Time.utc(2007,12,27), Proc.new { 10.minutes.ago } ]
   end
 
-This will check which one is the newest time to compare with the
+This will check which one is the most recent to compare with the
 "Last-Modified" field sent by the client.

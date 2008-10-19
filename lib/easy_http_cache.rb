@@ -22,7 +22,7 @@ module ActionController #:nodoc:
           )
           filter_options = {:only => actions}.merge(options)
 
-          around_filter(http_cache_filter, filter_options)
+          before_filter(http_cache_filter, filter_options)
         end
       end
 
@@ -33,7 +33,9 @@ module ActionController #:nodoc:
           @max_last_change_at = nil
         end
 
-        def before(controller)
+        def filter(controller)
+          return unless controller.request.get?
+
           # We perform Last-Modified HTTP Cache when the option :last_change_at is sent
           # or when another cache mechanism is not set.
           #
@@ -51,17 +53,12 @@ module ActionController #:nodoc:
           end
           perform_etag_cache = controller.request.env['HTTP_IF_NONE_MATCH'] && @digested_etag && @digested_etag == controller.request.headers['HTTP_IF_NONE_MATCH']
 
-          if !component_request?(controller) && (perform_time_cache || perform_etag_cache)
-            set_headers!(controller)
+          set_headers!(controller)
 
+          if !component_request?(controller) && (perform_time_cache || perform_etag_cache)
             controller.__send__(:head, :not_modified)
             return false
           end
-        end
-
-        def after(controller)
-          return unless controller.response.headers['Status'].to_i == 200
-          set_headers!(controller)
         end
 
         protected
@@ -140,15 +137,15 @@ module ActionController #:nodoc:
           headers = controller.response.headers
 
           if headers['ETag'] || headers['Last-Modified']
-            "#{control || 'private'}, max-age=0, must-revalidate"
+            @options[:control] || 'private, max-age=0, must-revalidate'
           elsif headers['Expires']
-            control || 'public'
+            @options[:control] || 'public'
           else
-            control
+            @options[:control]
           end
         end
 
-        # We should not render http cache when we are using components
+        # We should not do http cache when we are using components
         #
         def component_request?(controller)
           controller.instance_variable_get('@parent_controller')
