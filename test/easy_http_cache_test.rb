@@ -14,14 +14,13 @@ class HttpCacheTestController < ActionController::Base
   before_filter :set_perform
   attr_accessor :filter_performed
 
-  http_cache :index, :fail
+  http_cache :index
   http_cache :show, :last_change_at => 2.hours.ago, :if => Proc.new { |c| !c.request.format.json? }
   http_cache :edit, :last_change_at => Proc.new{ 30.minutes.ago }
   http_cache :destroy, :last_change_at => [2.hours.ago, Proc.new{|c| 30.minutes.ago }]
   http_cache :invalid, :last_change_at => [1.hours.ago, false]
 
-  http_cache :etag, :etag => Proc.new{ 'ETAG_CACHE' }, :control => :public
-  http_cache :namespace, :namespace => Proc.new{ 'José 0 _ 0 vaLim' }, :control => :public
+  http_cache :etag, :etag => Proc.new{ 'ETAG_CACHE' }, :control => 'public, max-age=0, must-revalidate'
   http_cache :expires_in, :expires_in => 10.minutes
   http_cache :expires_at, :expires_at => [:some_time_from_now, Time.utc(2020)], :expires_in => [20.years, 15.years]
   http_cache :expires, :expires_at => [:some_time_from_now, Time.utc(0)], :expires_in => [20.years, 10.minutes]
@@ -32,16 +31,11 @@ class HttpCacheTestController < ActionController::Base
     render :text => '200 OK', :status => 200
   end
 
-  def fail
-    render :text => '500 Internal Server Error', :status => 500
-  end
-
   alias_method :show, :index
   alias_method :edit, :index
   alias_method :destroy, :index
   alias_method :invalid, :index
   alias_method :etag, :index
-  alias_method :namespace, :index
   alias_method :expires_in, :index
   alias_method :expires_at, :index
   alias_method :expires, :index
@@ -135,24 +129,6 @@ class HttpCacheTest < Test::Unit::TestCase
     assert_equal '200 OK', @response.headers['Status']
   end
 
-  def test_http_cache_should_not_perform_with_500_status
-    # It does not send a Last-Modified field
-    get :fail
-    assert_equal '500 Internal Server Error', @response.headers['Status']
-    assert_nil @response.headers['Last-Modified']
-    assert_nil @response.headers['Expires']
-    assert_nil @response.headers['ETag']
-    reset!
-
-    # But it can process the HTTP_IF_MODIFIED_SINCE 
-    @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
-    get :fail
-    assert_equal '304 Not Modified', @response.headers['Status']
-    assert @response.headers['Last-Modified']
-    assert_nil @response.headers['Expires']
-    assert_nil @response.headers['ETag']
-  end
-
   def test_http_etag_cache
     get :etag
     assert_equal '200 OK', @response.headers['Status']
@@ -171,14 +147,6 @@ class HttpCacheTest < Test::Unit::TestCase
     assert_equal '200 OK', @response.headers['Status']
     assert_equal 'public, max-age=0, must-revalidate', @response.headers['Cache-Control']
     assert_equal etag_for('ETAG_CACHE'), @response.headers['ETag']
-  end
-
-  def test_private_namespace
-    get :namespace
-    assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'private=(Jos 0 _ 0 vaLim), max-age=0, must-revalidate', @response.headers['Cache-Control']
-    assert @response.headers['Last-Modified']
-    assert_nil @response.headers['Expires']
   end
 
   def test_expires_at

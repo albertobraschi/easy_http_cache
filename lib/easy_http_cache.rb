@@ -34,8 +34,6 @@ module ActionController #:nodoc:
         end
 
         def filter(controller)
-          return unless controller.request.get?
-
           # We perform Last-Modified HTTP Cache when the option :last_change_at is sent
           # or when another cache mechanism is not set.
           #
@@ -142,7 +140,7 @@ module ActionController #:nodoc:
             @options[:control] || 'public'
           else
             @options[:control]
-          end
+          end.to_s
         end
 
         # We should not do http cache when we are using components
