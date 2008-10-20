@@ -11,21 +11,16 @@ ActionController::Routing::Routes.draw do |map|
 end
 
 class HttpCacheTestController < ActionController::Base
-  before_filter :set_perform
-  attr_accessor :filter_performed
-
   http_cache :index
-  http_cache :show, :last_change_at => 2.hours.ago, :if => Proc.new { |c| !c.request.format.json? }
-  http_cache :edit, :last_change_at => Proc.new{ 30.minutes.ago }
-  http_cache :destroy, :last_change_at => [2.hours.ago, Proc.new{|c| 30.minutes.ago }]
-  http_cache :invalid, :last_change_at => [1.hours.ago, false]
+  http_cache :show, :last_modified => 2.hours.ago, :if => Proc.new { |c| !c.request.format.json? }
+  http_cache :edit, :last_modified => Proc.new{ 30.minutes.ago }
+  http_cache :destroy, :last_modified => [2.hours.ago, Proc.new{|c| 30.minutes.ago }]
+  http_cache :invalid, :last_modified => [1.hours.ago, false]
 
-  http_cache :etag, :etag => Proc.new{ 'ETAG_CACHE' }, :control => 'public, max-age=0, must-revalidate'
-  http_cache :expires_in, :expires_in => 10.minutes
-  http_cache :expires_at, :expires_at => [:some_time_from_now, Time.utc(2020)], :expires_in => [20.years, 15.years]
-  http_cache :expires, :expires_at => [:some_time_from_now, Time.utc(0)], :expires_in => [20.years, 10.minutes]
-  http_cache :resources, :last_change_at => [:resource, :list, :object]
-  http_cache :resources_with_method, :last_change_at => [:resource, :list, :object], :method => :cached_at
+  http_cache :etag, :etag => 'ETAG_CACHE'
+  http_cache :etag_array, :etag => [ 'ETAG_CACHE', :resource ]
+  http_cache :resources, :last_modified => [:resource, :list, :object]
+  http_cache :resources_with_method, :last_modified => [:resource, :list, :object], :method => :cached_at
 
   def index
     render :text => '200 OK', :status => 200
@@ -36,33 +31,30 @@ class HttpCacheTestController < ActionController::Base
   alias_method :destroy, :index
   alias_method :invalid, :index
   alias_method :etag, :index
-  alias_method :expires_in, :index
-  alias_method :expires_at, :index
-  alias_method :expires, :index
+  alias_method :etag_array, :index
   alias_method :resources, :index
   alias_method :resources_with_method, :index
 
   protected
-    def set_perform
-      @filter_performed = true
-    end
 
-    def some_time_from_now
-      Time.utc(2014)
-    end
-    
     def resource
       resource = OpenStruct.new
+      resource.instance_eval do
+        def to_param
+          12345
+        end
+      end
+
       resource.updated_at = 2.hours.ago
       resource
     end
-    
+
     def list
       list = OpenStruct.new
       list.updated_on = 30.minutes.ago
       list
     end
-    
+
     def object
       object = OpenStruct.new
       object.cached_at = 15.minutes.ago
@@ -76,45 +68,42 @@ class HttpCacheTest < Test::Unit::TestCase
   end
 
   def test_simple_http_cache_process
-    http_cache_process(:show, 1.hour.ago, 3.hours.ago)
+    last_modified_http_cache(:show, 1.hour.ago, 3.hours.ago)
   end
 
   def test_http_cache_process_with_proc
-    http_cache_process(:edit, 15.minutes.ago, 45.minutes.ago)
+    last_modified_http_cache(:edit, 15.minutes.ago, 45.minutes.ago)
   end
 
   def test_http_cache_process_with_array
-    http_cache_process(:destroy, 15.minutes.ago, 45.minutes.ago)
+    last_modified_http_cache(:destroy, 15.minutes.ago, 45.minutes.ago)
   end
   
   def test_http_cache_process_with_resources
-    http_cache_process(:resources, 15.minutes.ago, 45.minutes.ago)
+    last_modified_http_cache(:resources, 15.minutes.ago, 45.minutes.ago)
   end
 
   def test_http_cache_process_with_resources_with_method
-    http_cache_process(:resources_with_method, 10.minutes.ago, 20.minutes.ago)
+    last_modified_http_cache(:resources_with_method, 10.minutes.ago, 20.minutes.ago)
   end
 
   def test_http_cache_process_discards_invalid_input
-    http_cache_process(:invalid, 30.minutes.ago, 90.minutes.ago)
+    last_modified_http_cache(:invalid, 30.minutes.ago, 90.minutes.ago)
   end
 
-  def test_http_cache_without_expiration_time
+  def test_http_cache_without_input
     get :index
-    assert_equal '200 OK', @response.headers['Status']
-    assert_equal Time.utc(0).httpdate, @response.headers['Last-Modified']
+    assert_headers('200 OK', 'private, max-age=0, must-revalidate', 'Last-Modified', Time.utc(0).httpdate)
     reset!
 
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
     get :index
-    assert_equal '304 Not Modified', @response.headers['Status']
-    assert_equal Time.utc(0).httpdate, @response.headers['Last-Modified']
+    assert_headers('304 Not Modified', 'private, max-age=0, must-revalidate', 'Last-Modified', Time.utc(0).httpdate)
     reset!
 
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 3.hours.ago.httpdate
     get :index
-    assert_equal '304 Not Modified', @response.headers['Status']
-    assert_equal Time.utc(0).httpdate, @response.headers['Last-Modified']
+    assert_headers('304 Not Modified', 'private, max-age=0, must-revalidate', 'Last-Modified', Time.utc(0).httpdate)
   end
 
   def test_http_cache_with_conditional_options
@@ -130,74 +119,27 @@ class HttpCacheTest < Test::Unit::TestCase
   end
 
   def test_http_etag_cache
-    get :etag
-    assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'public, max-age=0, must-revalidate', @response.headers['Cache-Control']
-    assert_equal etag_for('ETAG_CACHE'), @response.headers['ETag']
-    reset!
-
-    @request.env['HTTP_IF_NONE_MATCH'] = etag_for('ETAG_CACHE')
-    get :etag
-    assert_equal '304 Not Modified', @response.headers['Status']
-    assert_equal etag_for('ETAG_CACHE'), @response.headers['ETag']
-    reset!
-
-    @request.env['ETag'] = 'ETAG_CACHE'
-    get :etag
-    assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'public, max-age=0, must-revalidate', @response.headers['Cache-Control']
-    assert_equal etag_for('ETAG_CACHE'), @response.headers['ETag']
+    etag_http_cache(:etag, 'ETAG_CACHE')
   end
 
-  def test_expires_at
-    get :expires_at
-    assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'public', @response.headers['Cache-Control']
-    assert_equal 'Wed, 01 Jan 2014 00:00:00 GMT', @response.headers['Expires']
-    assert_nil @response.headers['Last-Modified']
-  end
-
-  def test_expires_in
-    get :expires_in
-    assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'public', @response.headers['Cache-Control']
-    expires = Time.rfc2822(@response.headers['Expires'])
-    assert expires > 8.minutes.from_now && expires < 12.minutes.from_now
-    assert_nil @response.headers['Last-Modified']
-  end
-  
-  def test_expires_with_time_before_current_time
-    get :expires_in
-    assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'public', @response.headers['Cache-Control']
-    expires = Time.rfc2822(@response.headers['Expires'])
-    assert expires > 8.minutes.from_now && expires < 12.minutes.from_now
-    assert_nil @response.headers['Last-Modified']
+  def test_http_etag_cache_with_array
+    etag_http_cache(:etag_array, ['ETAG_CACHE', 12345])
   end
 
   def test_should_not_cache_when_rendering_components
     set_parent_controller! 
-
     get :show
-    assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
-    assert @response.headers['Last-Modified']
+    assert_headers('200 OK', 'no-cache')
 
     set_parent_controller!
-
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
     get :show
-    assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
-    assert @response.headers['Last-Modified']
+    assert_headers('200 OK', 'no-cache')
 
     set_parent_controller!
-
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 3.hours.ago.httpdate
     get :show
-    assert_equal '200 OK', @response.headers['Status']
-    assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
-    assert @response.headers['Last-Modified']
+    assert_headers('200 OK', 'no-cache')
   end
 
   private
@@ -215,8 +157,21 @@ class HttpCacheTest < Test::Unit::TestCase
       @controller.instance_variable_set('@parent_controller', old_controller)
     end
 
-    def etag_for(string)
-      %("#{Digest::MD5.hexdigest(string)}")
+    def etag_for(etag)
+      %("#{Digest::MD5.hexdigest(ActiveSupport::Cache.expand_cache_key(etag))}")
+    end
+
+    def assert_headers(status, control, cache_header=nil, value=nil)
+      assert_equal status, @response.headers['Status']
+      assert_equal control, @response.headers['Cache-Control']
+
+      if cache_header
+        if value
+          assert_equal value, @response.headers[cache_header]
+        else
+          assert @response.headers[cache_header]
+        end
+      end
     end
 
     # Goes through a http cache process:
@@ -228,23 +183,42 @@ class HttpCacheTest < Test::Unit::TestCase
     #   5. Request the same action with an expired HTTP_IF_MODIFIED_SINCE
     #   6. Get a '200 OK' status
     #   
-    def http_cache_process(action, not_expired_time, expired_time)
+    def last_modified_http_cache(action, not_expired_time, expired_time)
       get action
-      assert_equal '200 OK', @response.headers['Status']
-      assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
-      assert @response.headers['Last-Modified']
+      assert_headers('200 OK', 'private, max-age=0, must-revalidate', 'Last-Modified')
       reset!
 
       @request.env['HTTP_IF_MODIFIED_SINCE'] = not_expired_time.httpdate
       get action
-      assert_equal '304 Not Modified', @response.headers['Status']
-      assert @response.headers['Last-Modified']
+      assert_headers('304 Not Modified', 'private, max-age=0, must-revalidate', 'Last-Modified')
       reset!
 
       @request.env['HTTP_IF_MODIFIED_SINCE'] = expired_time.httpdate
       get action
-      assert_equal '200 OK', @response.headers['Status']
-      assert_equal 'private, max-age=0, must-revalidate', @response.headers['Cache-Control']
-      assert @response.headers['Last-Modified']
+      assert_headers('200 OK', 'private, max-age=0, must-revalidate', 'Last-Modified')
+    end
+
+    # Goes through a http cache process:
+    #
+    #   1. Request an action
+    #   2. Get a '200 OK' status
+    #   3. Request the same action with a valid ETAG
+    #   4. Get a '304 Not Modified' status
+    #   5. Request the same action with an invalid IF_NONE_MATCH
+    #   6. Get a '200 OK' status
+    #   
+    def etag_http_cache(action, variable)
+      get action
+      assert_headers('200 OK', 'private, max-age=0, must-revalidate', 'ETag', etag_for(variable))
+      reset!
+
+      @request.env['HTTP_IF_NONE_MATCH'] = etag_for(variable)
+      get action
+      assert_headers('304 Not Modified', 'private, max-age=0, must-revalidate', 'ETag', etag_for(variable))
+      reset!
+
+      @request.env['HTTP_IF_NONE_MATCH'] = 'INVALID'
+      get action
+      assert_headers('200 OK', 'private, max-age=0, must-revalidate', 'ETag', etag_for(variable))
     end
 end

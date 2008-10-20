@@ -2,74 +2,85 @@ Copyright (c) 2008 José Valim (jose.valim at gmail dot com)
 Site: http://www.pagestacker.com/
 Blog: http://josevalim.blogspot.com/
 License: MIT
-Version: 1.2.3
+Version: 2.0
 
 You can also read this README in pretty html at the GitHub project Wiki page
 
   http://github.com/josevalim/easy-http-cache/wikis/home
 
+Warning
+-------
+
+Since version 2.0, this plugin has drastically changed to fit Rails 2.2
+http cache goodness. :expires_in, :expires_at and :control options were
+removed, so if you want to use previous versions, see "Previous versions"
+below.
+
 Description
 -----------
 
-Allows Rails applications to use HTTP 1.1 cache specifications easily:
+Allows Rails applications to do conditional cache easily and in a DRY way
+(without messing up your actions):
 
   class ListsController < ApplicationController
     http_cache :index, :show
   end
 
-It accepts a wide range of options used to manipulate your cache
-headers. Those options usually accepts Proc, Method and Symbols
-that are evaluated within the current controller and must return the
-specified in which option below. You can also pass Arrays, except when is
-said otherwise.
+It uses :last_modified and :etag keys, that besides Time, String or resources
+accepts Proc, Method and Symbols that are evaluated within the current controller.
+Read more about each option below:
 
-  :last_change_at
-    Used to manipulate Last-Modified header.
-    It accepts anything that responds to the method :to_time,
-    :updated_at or :updated_on, allowing also to pass resources.
-    At least, you can pass an Array and it will get the newest time
-    from it to compare with the time sent by the client.
+  :last_modified
+    Used to manipulate Last-Modified header. You can pass any object that responds
+    to :to_time. If you pass a Proc or Method or Symbols, they will be evaluated
+    within the current controller and :to_time will be called.
+
+    You can also pass resources and :updated_at or :updated_on will be called on
+    it. If you want to call a different method on your resource, you can pass it as
+    a symbol using the :method option.
+
+    All times will be converted to UTC. Finally, if you pass an array, it will get
+    the most recent time to be used.
 
   :etag
-    Used to manipulate Etag header.
-    It accepts anything that responds to the method :to_s.
-    Does not accept Array.
+    Used to manipulate Etag header. If you pass a Proc or Method or Symbols, they
+    will be evaluated within the current controller.
 
-  :expires_at
-    Used to manipulate Expires header.
-    It accepts anything that responds to the method :to_time.
-    You can also pass an Array and it will get the closest time to
-    the current time and send it to the client.
-
-  :expires_in
-    Used to manipulate Expires header.
-    It accepts an interval that will be add to the current time. It
-    must respond to :to_i.
-    You can also pass an Array and it will get the closest time to
-    the current time and send it to the client.
-
-  If both :expires_in and :expires_at are set, it will get the closest
-  time to the current time and send it to the client. In both options,
-  if a time before the current time is sent, it will be discarded.
-
-  :control
-    Specifies Cache-Control header.
+    You can also pass an array and each element will be also evaluated with needed.
 
   :if
-    Only perform http cache if the result of the Proc, Method or Symbol is true.
+    Only perform http cache if it returns true.
 
   :unless
-    Only perform http cache if the result of the Proc, Method or Symbol is false.
+    Only perform http cache if it returns false.
+
 
 Install
 -------
 
-This plugin uses features that only exist on Rails 2.1 and above.
+This plugin uses features that only exist on Rails 2.2 and above.
+Scroll down to check how to install previous versions.
+
 So if you just want a static copy of the plugin:
 
     cd myapp
     git clone git://github.com/josevalim/easy-http-cache.git vendor/plugins/eash_http_cache
     rm -rf vendor/plugins/easy_http_cache/.git
+
+
+Previous versions
+-----------------
+
+If you are running on Rails 2.1.x, you should use v1.2.3:
+
+    cd myapp
+    git clone git://github.com/josevalim/easy-http-cache.git
+    cd vendor/plugins/easy-http-cache
+    git checkout v1.2.3
+    rm -rf ./.git
+
+If you are using a previous version, please updagrade your app. =)
+
 
 Examples
 --------
@@ -80,92 +91,53 @@ Just as above:
     http_cache :index, :show
   end
 
-If you do not want to cache json requests, you can simply do:
+If you do not want to cache when you are showing a flash message (and you
+usually want that), you can simply do:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :if => Proc.new { |c| !c.request.format.json? }
+    http_cache :index, :show, :if => Proc.new { |c| c.__send__(:flash).empty? }
   end
 
-Another important example (perform cache only if flash is empty):
+And if you do not want JSON requests:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :if => Proc.new { |c| c.send(:flash).empty? }
+    http_cache :index, :show, :unless => Proc.new { |c| c.request.format.json? }
   end
-
-You can easily set Expires header to expire all cache 1 hour after
-the request:
-
-  class ListsController < ApplicationController
-    http_cache :index, :show, :expires_at => Proc.new { 1.hour.from_now }
-  end
-
-Or in an easier way:
-
-  class ListsController < ApplicationController
-    http_cache :index, :show, :expires_in => 1.hour
-  end
-
-And you can also set :etag header (it also accepts Procs):
-
-  class ListsController < ApplicationController
-    http_cache :index, :show, :etag => 'this_will_never_change', :control => :public
-  end
-
-All etags will be Digested with MD5.
 
 Or if you want to expire all http cache before 2008, just do:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => Time.utc(2008)
+    http_cache :index, :show, :last_modified => Time.utc(2008)
   end
 
-Or if you are looking into something more dynamic:
-
-  class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => Proc.new{ 10.minutes.ago }
-  end
-
-How does the last example work?
--------------------------------
-
-The first time http://www.railsapp.com/lists/index is requested, it renders the
-action normally but adds a "Last-Modified" to your response with the current
-request time, let's suppose 10h30.
-
-If the client do another request at 10h35, the http_cache will check that
-:last_change_at and see that the last change was at 10h25, which is older than
-the "Last-Modified" field (10h30) returned by the client's browser, so it sends
-a "304 Not Modified" response and does not execute the action.
-
-But, if another request from the same client comes at 10h42, the last change was
-at 10h32, which is newer than the "Last-Modified" field (10h30), so the action
-is performed again and "Last-Modified" field set at 10h42.
-
-More examples
--------------
-
-Now that we understand how it works, we can do even more dynamic caches!
-
-So, if You want to cache a list and automatically expire the cache when
+If You want to cache a list and automatically expire the cache when
 it changes, just do:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => :list
+    http_cache :index, :show, :last_modified => :list
 
     protected
-    def list
-      @list ||= List.find(params[:id])
-    end
+      def list
+        @list ||= List.find(params[:id])
+      end
   end
 
-This will automatically call the list method on your controller, get
-the object @list and call updated_at or updated_on on it.
+You can also set :etag header:
+
+  class ListsController < ApplicationController
+    http_cache :index, :show, :etag => :list
+
+    protected
+      def list
+        @list ||= List.find(params[:id])
+      end
+  end
 
 If you are using a resource that doesn't respond to updated_at or updated_on,
 you can pass a method as parameter and it will be called in your resources:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :last_change_at => :list, :method => :cached_at
+    http_cache :index, :show, :last_modified => :list, :method => :cached_at
 
     protected
     def list
@@ -173,11 +145,11 @@ you can pass a method as parameter and it will be called in your resources:
     end
   end
 
-Finally, you can also pass an array at :last_change_at as below:
+Finally, you can also pass an array at :last_modified as below:
 
   class ListsController < ApplicationController
     http_cache :index, :show,
-               :last_change_at => [ Time.utc(2007,12,27), Proc.new { 10.minutes.ago } ]
+               :last_modified => [ :list, Time.utc(2007,12,27) ]
   end
 
 This will check which one is the most recent to compare with the
