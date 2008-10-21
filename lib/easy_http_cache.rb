@@ -19,7 +19,7 @@ module ActionController #:nodoc:
           http_cache_filter = HttpCacheFilter.new(
             :method => options.delete(:method),
             :last_modified => [options.delete(:last_modified)].flatten.compact,
-            :etag => [options.delete(:etag)].flatten.compact
+            :etag => options.delete(:etag)
           )
           filter_options = {:only => actions}.merge(options)
 
@@ -37,11 +37,11 @@ module ActionController #:nodoc:
           #
           return if component_request?(controller)
 
-          last_modified = get_last_modified_value(controller)
+          last_modified = get_last_modified(controller)
           controller.response.last_modified = last_modified if last_modified
 
           processed_etags = get_processed_etags(controller)
-          controller.response.etag = processed_etags unless processed_etags.empty?
+          controller.response.etag = processed_etags unless processed_etags.blank?
 
           if controller.request.fresh?(controller.response)
             controller.__send__(:head, :not_modified)
@@ -53,15 +53,19 @@ module ActionController #:nodoc:
           # Receives an etag array and processes all Method, Proc and Symbols
           #
           def get_processed_etags(controller)
-            @options[:etag].collect do |item|
-              evaluate_method(item, controller)
+            if @options[:etag].is_a?(Array)
+              @options[:etag].collect do |item|
+                evaluate_method(item, controller)
+              end
+            elsif @options[:etag]
+              evaluate_method(@options[:etag], controller)
             end
           end
 
           # We perform Last-Modified HTTP Cache when the option :last_modified is sent
           # or no other cache mechanism is set (then we set a very old timestamp).
           #
-          def get_last_modified_value(controller)
+          def get_last_modified(controller)
             # First add RAILS_APP_STAMP if it's defined.
             #
             # You should define that variable on your environment if you want to invalidate all
@@ -76,7 +80,7 @@ module ActionController #:nodoc:
               @options[:last_modified].collect do |item|
                 evaluate_time(item, controller)
               end.compact.sort.last
-            elsif @options[:etag].empty? && @options[:expires_in].nil? && @options[:expires_at].nil?
+            elsif @options[:etag].blank?
               Time.utc(0)
             else
               nil

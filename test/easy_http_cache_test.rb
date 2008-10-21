@@ -126,6 +126,11 @@ class HttpCacheTest < Test::Unit::TestCase
     etag_http_cache(:etag_array, ['ETAG_CACHE', 12345])
   end
 
+  def test_http_etag_cache_with_env_variable
+    ENV['RAILS_APP_VERSION'] = '1.2.3'
+    etag_http_cache(:etag, 'ETAG_CACHE')
+  end
+
   def test_should_not_cache_when_rendering_components
     set_parent_controller! 
     get :show
