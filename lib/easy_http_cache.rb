@@ -41,7 +41,7 @@ module ActionController #:nodoc:
           controller.response.last_modified = last_modified if last_modified
 
           processed_etags = get_processed_etags(controller)
-          controller.response.etag = processed_etags unless processed_etags.blank?
+          controller.response.etag = processed_etags if processed_etags
 
           if controller.request.fresh?(controller.response)
             controller.__send__(:head, :not_modified)
@@ -50,7 +50,13 @@ module ActionController #:nodoc:
         end
 
         protected
-          # Receives an etag array and processes all Method, Proc and Symbols
+          # If :etag is an array, it processes all Methods, Procs and Symbols
+          # and return them as array. If it's an object, we only evaluate it.
+          #
+          # Finally, if :etag is not sent but RAILS_CACHE_ID or RAILS_APP_VERSION
+          # are set, we return an empty string allowing etag to be performed
+          # because those variables, when modified, are a valid way to expire
+          # all previous caches.
           #
           def get_processed_etags(controller)
             if @options[:etag].is_a?(Array)
@@ -59,6 +65,10 @@ module ActionController #:nodoc:
               end
             elsif @options[:etag]
               evaluate_method(@options[:etag], controller)
+            elsif ENV['RAILS_CACHE_ID'] || ENV['RAILS_APP_VERSION']
+              ''
+            else
+              nil
             end
           end
 
@@ -66,13 +76,6 @@ module ActionController #:nodoc:
           # or no other cache mechanism is set (then we set a very old timestamp).
           #
           def get_last_modified(controller)
-            # First add RAILS_APP_STAMP if it's defined.
-            #
-            # You should define that variable on your environment if you want to invalidate all
-            # previous http caches when you change your app.
-            #
-            @options[:last_modified] << ENV["RAILS_APP_STAMP"] if ENV["RAILS_APP_STAMP"]
-
             # Then, if @options[:last_modified] is not empty, we run through the array
             # processing all objects (if needed) and return the latest one to be used.
             #

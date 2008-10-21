@@ -85,14 +85,8 @@ If you are using a previous version, please updagrade your app. =)
 Variables
 ---------
 
-It can also use some enviroment variables to expire all caches when you
-upgrade your app.
-
-You can set ENV['RAILS_APP_STAMP'] with a Time object and it will be appended
-to your Last-Modified options.
-
-You can also set ENV['RAILS_CACHE_ID'] or ENV['RAILS_APP_VERSION'] to change
-the ETag that will be generated, expiring all previous caches. These variables
+You can set ENV['RAILS_CACHE_ID'] or ENV['RAILS_APP_VERSION'] to change
+the ETag that will be generated, expiring all previous caches. Those variables
 are also used by other cache stores (memcached, file, ...).
 
 

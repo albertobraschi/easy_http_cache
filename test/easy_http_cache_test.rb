@@ -67,27 +67,27 @@ class HttpCacheTest < Test::Unit::TestCase
     reset!
   end
 
-  def test_simple_http_cache_process
+  def test_last_modified_http_cache
     last_modified_http_cache(:show, 1.hour.ago, 3.hours.ago)
   end
 
-  def test_http_cache_process_with_proc
+  def test_last_modified_http_cache_with_proc
     last_modified_http_cache(:edit, 15.minutes.ago, 45.minutes.ago)
   end
 
-  def test_http_cache_process_with_array
+  def test_last_modified_http_cache_with_array
     last_modified_http_cache(:destroy, 15.minutes.ago, 45.minutes.ago)
   end
   
-  def test_http_cache_process_with_resources
+  def test_last_modified_http_cache_with_resources
     last_modified_http_cache(:resources, 15.minutes.ago, 45.minutes.ago)
   end
 
-  def test_http_cache_process_with_resources_with_method
+  def test_last_modified_http_cache_with_resources_with_method
     last_modified_http_cache(:resources_with_method, 10.minutes.ago, 20.minutes.ago)
   end
 
-  def test_http_cache_process_discards_invalid_input
+  def test_last_modified_http_cache_discards_invalid_input
     last_modified_http_cache(:invalid, 30.minutes.ago, 90.minutes.ago)
   end
 
@@ -118,15 +118,25 @@ class HttpCacheTest < Test::Unit::TestCase
     assert_equal '200 OK', @response.headers['Status']
   end
 
-  def test_http_etag_cache
+  def test_http_cache_without_input_with_env_variable
+    ENV['RAILS_APP_VERSION'] = '1.2.3'
+
+    get :index
+    assert_headers('200 OK', 'private, max-age=0, must-revalidate', 'Last-Modified', Time.utc(0).httpdate)
+    reset!
+
+    etag_http_cache(:index, '')
+  end
+
+  def test_etag_http_cache
     etag_http_cache(:etag, 'ETAG_CACHE')
   end
 
-  def test_http_etag_cache_with_array
+  def test_etag_http_cache_with_array
     etag_http_cache(:etag_array, ['ETAG_CACHE', 12345])
   end
 
-  def test_http_etag_cache_with_env_variable
+  def test_etag_http_cache_with_env_variable
     ENV['RAILS_APP_VERSION'] = '1.2.3'
     etag_http_cache(:etag, 'ETAG_CACHE')
   end
