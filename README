@@ -11,7 +11,7 @@ You can also read this README in pretty html at the GitHub project Wiki page
 Warning
 -------
 
-Since version 2.0, this plugin has drastically changed to fit Rails 2.2
+Since version 2.0, this plugin/gem has drastically changed to fit Rails 2.2
 http cache goodness. :expires_in, :expires_at and :control options were
 removed, so if you want to use previous versions, see "Previous versions"
 below.
@@ -58,10 +58,20 @@ Read more about each option below:
 Install
 -------
 
-This plugin uses features that only exist on Rails 2.2 and above.
-Scroll down to check how to install previous versions.
+Install Easy HTTP Cache is very easy. It is stored in GitHub, so if you
+have never installed a gem via GitHub run the following:
 
-So if you just want a static copy of the plugin:
+  gem sources -a http://gems.github.com
+
+Then install the gem:
+
+  sudo gem install josevalim-easy_http_cache
+
+In RAILS_ROOT/config/environment.rb:
+
+  config.gem "josevalim-easy_http_cache",  :lib => "easy_http_cache", :source => "http://gems.github.com"
+
+If you want it as plugin, just do:
 
     cd myapp
     git clone git://github.com/josevalim/easy_http_cache.git
