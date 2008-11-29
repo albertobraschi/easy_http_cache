@@ -6,7 +6,7 @@ Version: 2.0
 
 You can also read this README in pretty html at the GitHub project Wiki page
 
-  http://github.com/josevalim/easy-http-cache/wikis/home
+  http://github.com/josevalim/easy_http_cache/wikis/home
 
 Warning
 -------
@@ -64,7 +64,7 @@ Scroll down to check how to install previous versions.
 So if you just want a static copy of the plugin:
 
     cd myapp
-    git clone git://github.com/josevalim/easy-http-cache.git vendor/plugins/eash_http_cache
+    git clone git://github.com/josevalim/easy_http_cache.git
     rm -rf vendor/plugins/easy_http_cache/.git
 
 
@@ -74,8 +74,8 @@ Previous versions
 If you are running on Rails 2.1.x, you should use v1.2.3:
 
     cd myapp
-    git clone git://github.com/josevalim/easy-http-cache.git
-    cd vendor/plugins/easy-http-cache
+    git clone git://github.com/josevalim/easy_http_cache.git
+    cd vendor/plugins/easy_http_cache
     git checkout v1.2.3
     rm -rf ./.git
 
