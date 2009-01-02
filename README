@@ -8,14 +8,6 @@ You can also read this README in pretty html at the GitHub project Wiki page
 
   http://github.com/josevalim/easy_http_cache/wikis/home
 
-Warning
--------
-
-Since version 2.0, this plugin/gem has drastically changed to fit Rails 2.2
-http cache goodness. :expires_in, :expires_at and :control options were
-removed, so if you want to use previous versions, see "Previous versions"
-below.
-
 Description
 -----------
 
@@ -23,36 +15,42 @@ Allows Rails applications to do conditional cache easily and in a DRY way
 (without messing up your actions):
 
   class ListsController < ApplicationController
-    http_cache :index, :show
+    http_cache :index, :show, :last_modified => :list
+    
+    protected
+      def list
+        @list ||= List.find(params[:id])
+      end
   end
 
 It uses :last_modified and :etag keys, that besides Time, String or resources
-accepts Proc, Method and Symbols that are evaluated within the current controller.
-Read more about each option below:
+accepts Proc, Method and Symbol that are evaluated within the current controller.
+
+Read more about each option (more examples at the end of this page):
 
   :last_modified
     Used to manipulate Last-Modified header. You can pass any object that responds
-    to :to_time. If you pass a Proc or Method or Symbols, they will be evaluated
-    within the current controller and :to_time will be called.
+    to :updated_at, :updated_on or :to_time. If you pass a Proc or Method or Symbol,
+    they will be evaluated within the current controller first.
 
-    You can also pass resources and :updated_at or :updated_on will be called on
-    it. If you want to call a different method on your resource, you can pass it as
-    a symbol using the :method option.
-
-    All times will be converted to UTC. Finally, if you pass an array, it will get
-    the most recent time to be used.
+    Finally, if you pass an array, it will get the most recent time to be used.
 
   :etag
-    Used to manipulate Etag header. If you pass a Proc or Method or Symbols, they
-    will be evaluated within the current controller.
-
-    You can also pass an array and each element will be also evaluated with needed.
+    Used to manipulate Etag header. The Etag is generated as memcached keys are
+    generated, i.e. calling to_param in the object and then MD5 is applied.
+    
+    If you pass a Proc or Method or Symbols, they will be also evaluated within the
+    current controller first.
 
   :if
     Only perform http cache if it returns true.
 
   :unless
     Only perform http cache if it returns false.
+  
+  :method
+    If in :last_modified you want to pass a object that doesn't respond to updated_at,
+    updated_on or to_time, you can specify the method that will be called in this object.
 
 
 Install
@@ -89,21 +87,21 @@ If you are running on Rails 2.1.x, you should use v1.2.3:
     git checkout v1.2.3
     rm -rf ./.git
 
-If you are using a previous version, please updagrade your app. =)
+If you are using earlier than 2.1, please upgrade your app. =)
 
 
 Variables
 ---------
 
-You can set ENV['RAILS_CACHE_ID'] or ENV['RAILS_APP_VERSION'] to change
-the ETag that will be generated, expiring all previous caches. Those variables
-are also used by other cache stores (memcached, file, ...).
+As in memcached, you can set ENV['RAILS_CACHE_ID'] or ENV['RAILS_APP_VERSION'] variables
+to change the Etag that will be generated. This means you can control the cache by setting
+a timestamp or a version number in ENV['RAILS_APP_VERSION'] everytime you deploy.
 
 
 Examples
 --------
 
-Just as above:
+The example below will cache your actions and it will never expire:
 
   class ListsController < ApplicationController
     http_cache :index, :show
@@ -113,10 +111,10 @@ If you do not want to cache when you are showing a flash message (and you
 usually want that), you can simply do:
 
   class ListsController < ApplicationController
-    http_cache :index, :show, :if => Proc.new { |c| c.__send__(:flash).empty? }
+    http_cache :index, :show, :if => Proc.new { |c| c.send(:flash).empty? }
   end
 
-And if you do not want JSON requests:
+And if you do not want to cache JSON requests:
 
   class ListsController < ApplicationController
     http_cache :index, :show, :unless => Proc.new { |c| c.request.format.json? }
@@ -128,8 +126,8 @@ Or if you want to expire all http cache before 2008, just do:
     http_cache :index, :show, :last_modified => Time.utc(2008)
   end
 
-If You want to cache a list and automatically expire the cache when
-it changes, just do:
+If you want to cache a list and automatically expire the cache when it changes,
+just do (it will check updated_at and updated_on on the @list object):
 
   class ListsController < ApplicationController
     http_cache :index, :show, :last_modified => :list
@@ -140,7 +138,8 @@ it changes, just do:
       end
   end
 
-You can also set :etag header:
+You can also set :etag header (it will generate an etag calling to_param
+in the object and applying MD5):
 
   class ListsController < ApplicationController
     http_cache :index, :show, :etag => :list
@@ -152,23 +151,44 @@ You can also set :etag header:
   end
 
 If you are using a resource that doesn't respond to updated_at or updated_on,
-you can pass a method as parameter and it will be called in your resources:
+you can pass a method as parameter that will be called in your resources:
 
   class ListsController < ApplicationController
     http_cache :index, :show, :last_modified => :list, :method => :cached_at
 
     protected
-    def list
-      @list ||= List.find(params[:id])
-    end
+      def list
+        @list ||= List.find(params[:id])
+      end
   end
 
+The sample below will call @list.cached_at to generate Last-Modified header.
 Finally, you can also pass an array at :last_modified as below:
 
-  class ListsController < ApplicationController
+  class ItemsController < ApplicationController
     http_cache :index, :show,
-               :last_modified => [ :list, Time.utc(2007,12,27) ]
+               :last_modified => [ :list, :item ]
+
+    protected
+      def list
+        @list ||= List.find(params[:list_id])
+      end
+      
+      def item
+        @item ||= list.items.find(params[:id])
+      end
   end
 
 This will check which one is the most recent to compare with the
 "Last-Modified" field sent by the client.
+
+
+What if?
+--------
+
+At this point (or at some point), you will ask what happens if you use :etag
+and :last_modified at the same time.
+
+Well, Padawan, the specification says that if both are sent by the client, both have
+to be valid for the cache not be considered stale. This subject was already brought
+to Rails Core group and this is also how Rails' current implementation behaves.
