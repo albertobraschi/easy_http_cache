@@ -12,7 +12,6 @@ Gem::Specification.new do |s|
     "MIT-LICENSE",
 		"README",
 		"Rakefile",
-		"init.rb",
 		"lib/easy_http_cache.rb",
     "test/easy_http_cache_test.rb"
   ]
