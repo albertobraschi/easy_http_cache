@@ -2,11 +2,18 @@ require 'rake'
 require 'rake/testtask'
 require 'rake/rdoctask'
 
-desc 'Generate documentation for Footnotes plugin.'
+desc 'Run tests for Easy HTTP Cache.'
+Rake::TestTask.new(:test) do |t|
+  t.pattern = 'test/**/*_test.rb'
+  t.verbose = true
+end
+
+desc 'Generate documentation for Easy HTTP Cache.'
 Rake::RDocTask.new(:rdoc) do |rdoc|
   rdoc.rdoc_dir = 'rdoc'
   rdoc.title    = 'Easy HTTP Cache'
   rdoc.options << '--line-numbers' << '--inline-source'
   rdoc.rdoc_files.include('README')
+  rdoc.rdoc_files.include('MIT-LICENSE')
   rdoc.rdoc_files.include('lib/**/*.rb')
 end
