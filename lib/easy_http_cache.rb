@@ -33,10 +33,6 @@ module ActionController #:nodoc:
         end
 
         def filter(controller)
-          # We don't go ahead if we are rendering a component
-          #
-          return if component_request?(controller)
-
           last_modified = get_last_modified(controller)
           controller.response.last_modified = last_modified if last_modified
 
@@ -44,7 +40,7 @@ module ActionController #:nodoc:
           controller.response.etag = processed_etags if processed_etags
 
           if controller.request.fresh?(controller.response)
-            controller.__send__(:head, :not_modified)
+            controller.send(:head, :not_modified)
             return false
           end
         end
@@ -53,11 +49,6 @@ module ActionController #:nodoc:
           # If :etag is an array, it processes all Methods, Procs and Symbols
           # and return them as array. If it's an object, we only evaluate it.
           #
-          # Finally, if :etag is not sent but RAILS_CACHE_ID or RAILS_APP_VERSION
-          # are set, we return an empty string allowing etag to be performed
-          # because those variables, when modified, are a valid way to expire
-          # all previous caches.
-          #
           def get_processed_etags(controller)
             if @options[:etag].is_a?(Array)
               @options[:etag].collect do |item|
@@ -65,8 +56,6 @@ module ActionController #:nodoc:
               end
             elsif @options[:etag]
               evaluate_method(@options[:etag], controller)
-            elsif ENV['RAILS_CACHE_ID'] || ENV['RAILS_APP_VERSION']
-              ''
             else
               nil
             end
@@ -126,15 +115,10 @@ module ActionController #:nodoc:
             end
           end
 
-          # We should not do http cache when we are using components
-          #
-          def component_request?(controller)
-            controller.instance_variable_get('@parent_controller')
-          end
         end
 
     end
   end
 end
 
-ActionController::Base.__send__ :include, ActionController::Caching::HttpCache
+ActionController::Base.send :include, ActionController::Caching::HttpCache

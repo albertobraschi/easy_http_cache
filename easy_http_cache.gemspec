@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name     = "easy_http_cache"
-  s.version  = "2.0"
-  s.date     = "2008-11-29"
+  s.version  = "2.1"
+  s.date     = "2009-02-04"
   s.summary  = "Allows Rails applications to use HTTP cache specifications easily."
   s.email    = "jose.valim@gmail.com"
   s.homepage = "http://github.com/josevalim/easy_http_cache"

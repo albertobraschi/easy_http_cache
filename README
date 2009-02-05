@@ -1,6 +1,6 @@
 Easy HTTP Cache
 License: MIT
-Version: 2.0
+Version: 2.1
 
 You can also read this README in pretty html at the GitHub project Wiki page
 
@@ -58,9 +58,6 @@ Install Easy HTTP Cache is very easy. It is stored in GitHub, so if you
 have never installed a gem via GitHub run the following:
 
   gem sources -a http://gems.github.com
-
-Then install the gem:
-
   sudo gem install josevalim-easy_http_cache
 
 In RAILS_ROOT/config/environment.rb:
@@ -73,6 +70,7 @@ If you want it as plugin, just do:
     git clone git://github.com/josevalim/easy_http_cache.git
     rm -rf vendor/plugins/easy_http_cache/.git
 
+Current version supports Rails 2.2.x and Rails 2.3.x.
 
 Previous versions
 -----------------

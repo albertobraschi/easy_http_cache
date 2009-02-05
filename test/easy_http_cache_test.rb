@@ -1,9 +1,16 @@
 # Those lines are plugin test settings
-ENV["RAILS_ENV"] = "test"
+require 'test/unit'
+require 'rubygems'
 require 'ostruct'
-require File.dirname(__FILE__) + '/../../../../config/environment'
+
+ENV["RAILS_ENV"] = "test"
+
+require 'active_support'
+require 'action_controller'
+require 'action_controller/test_case'
+require 'action_controller/test_process'
+
 require File.dirname(__FILE__) + '/../lib/easy_http_cache.rb'
-require 'test_help'
 
 ActionController::Base.perform_caching = true
 ActionController::Routing::Routes.draw do |map|
@@ -62,7 +69,7 @@ class HttpCacheTestController < ActionController::Base
     end
 end
 
-class HttpCacheTest < Test::Unit::TestCase
+class HttpCacheTest < ActionController::TestCase
   def setup
     reset!
   end
@@ -115,17 +122,7 @@ class HttpCacheTest < Test::Unit::TestCase
     @request.env['HTTP_ACCEPT'] = 'application/json'
     @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
     get :show
-    assert_equal '200 OK', @response.headers['Status']
-  end
-
-  def test_http_cache_without_input_with_env_variable
-    ENV['RAILS_APP_VERSION'] = '1.2.3'
-
-    get :index
-    assert_headers('200 OK', 'private, max-age=0, must-revalidate', 'Last-Modified', Time.utc(0).httpdate)
-    reset!
-
-    etag_http_cache(:index, '')
+    assert_equal '200 OK', @response.status
   end
 
   def test_etag_http_cache
@@ -141,22 +138,6 @@ class HttpCacheTest < Test::Unit::TestCase
     etag_http_cache(:etag, 'ETAG_CACHE')
   end
 
-  def test_should_not_cache_when_rendering_components
-    set_parent_controller! 
-    get :show
-    assert_headers('200 OK', 'no-cache')
-
-    set_parent_controller!
-    @request.env['HTTP_IF_MODIFIED_SINCE'] = 1.hour.ago.httpdate
-    get :show
-    assert_headers('200 OK', 'no-cache')
-
-    set_parent_controller!
-    @request.env['HTTP_IF_MODIFIED_SINCE'] = 3.hours.ago.httpdate
-    get :show
-    assert_headers('200 OK', 'no-cache')
-  end
-
   private
     def reset!
       @request = ActionController::TestRequest.new
@@ -164,20 +145,12 @@ class HttpCacheTest < Test::Unit::TestCase
       @controller = HttpCacheTestController.new
     end
 
-    def set_parent_controller!
-      get :index
-      old_controller = @controller.dup
-      reset!
-
-      @controller.instance_variable_set('@parent_controller', old_controller)
-    end
-
     def etag_for(etag)
       %("#{Digest::MD5.hexdigest(ActiveSupport::Cache.expand_cache_key(etag))}")
     end
 
     def assert_headers(status, control, cache_header=nil, value=nil)
-      assert_equal status, @response.headers['Status']
+      assert_equal status, @response.status
       assert_equal control, @response.headers['Cache-Control']
 
       if cache_header
